@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML5 Engine - Bomberman Clone</title>
+    <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- Engine core -->
+    <script src="src/engine/renderer.js"></script>
+    <script src="src/engine/main.js"></script>
+    <script src="src/engine/utils_math.js"></script>
+    <script src="src/engine/input.js"></script>
+    <script src="src/engine/audioplayer.js"></script>
+    <script src="src/engine/game.js"></script>
+    <script src="src/engine/utils_classes.js"></script>
+    <script src="src/engine/gameobjects.js"></script>
+
+    <!-- Example game -->
+    <script src="src/examples/bomberman/bomberman.js"></script>
+
+    <style>
+        body { display:flex; align-items:center; justify-content:center; height:100vh; margin:0; background:#f3f3f3; }
+        #ui { position: absolute; top: 10px; left: 10px; z-index: 10; }
+        #notes { position: absolute; bottom: 10px; left: 10px; font-family: Arial, sans-serif; font-size: 13px; color:#333; }
+
+        /* Main Menu styles */
+        #mainMenu {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        #mainMenu > div {
+            background: #fff;
+            padding: 30px 40px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+        }
+
+        #mainMenu h1 {
+            margin: 0;
+            font-size: 48px;
+        }
+
+        #mainMenu p {
+            margin: 6px 0 20px;
+            font-size: 20px;
+            color: #666;
+        }
+
+        #mainMenu button {
+            padding: 10px 24px;
+            font-size: 18px;
+        }
+
+        /* Pause Overlay styles */
+        #pauseOverlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        #pauseOverlay > div {
+            background: #fff;
+            padding: 24px;
+            border-radius: 8px;
+            width: 360px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        #pauseOverlay h2 {
+            margin: 0 0 10px;
+        }
+
+        #pauseOverlay label {
+            display: block;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+
+        #pauseOverlay input {
+            width: 100%;
+            margin-bottom: 12px;
+        }
+
+        #pauseOverlay button {
+            padding: 8px 16px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <button id="startBtn">Start / Restart</button>
+    </div>
+
+    <canvas id="myCanvas" width="800" height="600" style="border:1px solid #888; background: #fff;" tabindex="0"></canvas>
+
+    <div id="notes">WASD = move, Space = place bomb</div>
+
+    <!-- Main Menu -->
+    <div id="mainMenu" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);">
+        <div style="background:#fff; padding:30px 40px; border-radius:8px; text-align:center; box-shadow:0 6px 18px rgba(0,0,0,0.3);">
+            <h1 style="margin:0; font-size:48px;">WastedChef</h1>
+            <p style="margin:6px 0 20px; font-size:20px; color:#666;">Who Gave Them Bombs?</p>
+            <button id="menuPlayBtn" style="padding:10px 24px; font-size:18px;">Play</button>
+        </div>
+    </div>
+
+    <!-- Pause Overlay -->
+    <div id="pauseOverlay" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);">
+        <div style="background:#fff; padding:24px; border-radius:8px; width:360px; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+            <h2 style="margin:0 0 10px;">Paused</h2>
+            <label style="display:block; margin-bottom:8px; text-align:left;">Volume</label>
+            <input id="volumeSlider" type="range" min="0" max="100" value="100" style="width:100%; margin-bottom:12px;" />
+            <div style="display:flex; gap:8px; justify-content:center;">
+                <button id="resumeBtn" style="padding:8px 16px;">Resume</button>
+                <button id="menuBtn" style="padding:8px 16px;">Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Small SVG sprites in data-URI form (keeps repository light).
+        const playerSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
+            <svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
+                <rect x='6' y='8' width='28' height='24' rx='4' ry='4' fill='%23007acc' />
+                <circle cx='18' cy='18' r='3' fill='%23fff' />
+            </svg>`);
+
+        const bombSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
+            <svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'>
+                <circle cx='14' cy='14' r='10' fill='%23000' />
+                <rect x='18' y='2' width='4' height='8' fill='%23b33' rx='1' ry='1' />
+            </svg>`);
+
+        const brickSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
+            <svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
+                <rect x='2' y='6' width='36' height='28' fill='%238b4513' rx='3' ry='3' />
+            </svg>`);
+
+        const wallSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
+            <svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
+                <rect x='2' y='6' width='36' height='28' fill='%23333' rx='2' ry='2' />
+            </svg>`);
+
+        const enemySVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
+            <svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
+                <rect x='4' y='6' width='28' height='22' fill='%23c03030' rx='4' ry='4' />
+                <circle cx='12' cy='14' r='2' fill='%23fff' />
+            </svg>`);
+
+        // Create Image objects for game to use if desired
+        const playerImage = new Image(); playerImage.src = playerSVG;
+        const bombImage = new Image(); bombImage.src = bombSVG;
+        const brickImage = new Image(); brickImage.src = brickSVG;
+        const wallImage = new Image(); wallImage.src = wallSVG;
+        const enemyImage = new Image(); enemyImage.src = enemySVG;
+
+        // bomb sprite sheet (4 frames 16x16 in a 64x16 image)
+        const bombSprites = new Image(); bombSprites.src = "src/examples/bomberman/assets/bomb_sprites.png";
+
+        // Simple synthesized sounds via WebAudio for place bomb and explosion and death
+        let audioCtx = null;
+
+        // Global audio volume (0.0 - 1.0)
+        window.GameVolume = 1.0;
+
+        // Modify audio functions to respect GameVolume
+        function ensureAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playPlaceBomb() {
+            ensureAudio();
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = 'triangle';
+            o.frequency.setValueAtTime(440, audioCtx.currentTime);
+            g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.09 * window.GameVolume, audioCtx.currentTime + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + 0.22);
+        }
+
+        function playExplosion() {
+            ensureAudio();
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = 'sawtooth';
+            o.frequency.setValueAtTime(120, audioCtx.currentTime);
+            g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.3 * window.GameVolume, audioCtx.currentTime + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + 0.6);
+        }
+
+        function playDeath() {
+            ensureAudio();
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = 'square';
+            o.frequency.setValueAtTime(200, audioCtx.currentTime);
+            g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.2 * window.GameVolume, audioCtx.currentTime + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.7);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + 0.7);
+        }
+
+        // Expose assets globally so src/examples/bomberman/bomberman.js can use them if it checks window.BombermanAssets
+        window.BombermanAssets = {
+            playerImage, bombImage, brickImage, wallImage, enemyImage, bombSprites,
+            playPlaceBomb, playExplosion, playDeath
+        };
+
+        function showMainMenu() {
+            document.getElementById('mainMenu').style.display = 'flex';
+            document.getElementById('pauseOverlay').style.display = 'none';
+            // pause the game loop
+            window.GamePaused = true;
+        }
+
+        function hideMainMenu() {
+            document.getElementById('mainMenu').style.display = 'none';
+            // allow the game to run
+            window.GamePaused = false;
+        }
+
+        function startGameFromMenu() {
+            hideMainMenu();
+            // initialize the example game
+            Init(BombermanGame);
+        }
+
+        function togglePause() {
+            const overlay = document.getElementById('pauseOverlay');
+            if (overlay.style.display === 'flex') {
+                overlay.style.display = 'none';
+                window.GamePaused = false;
+            } else {
+                overlay.style.display = 'flex';
+                window.GamePaused = true;
+            }
+        }
+
+        // Start the page
+        window.onload = () => {
+            // Start button (keeps old behaviour as restart)
+            document.getElementById('startBtn').addEventListener('click', () => {
+                Init(BombermanGame);
+                document.getElementById('mainMenu').style.display = 'none';
+                window.GamePaused = false;
+            });
+
+            // Main menu Play button
+            document.getElementById('menuPlayBtn').addEventListener('click', () => startGameFromMenu());
+
+            // Pause overlay buttons
+            document.getElementById('resumeBtn').addEventListener('click', () => togglePause());
+            document.getElementById('menuBtn').addEventListener('click', () => {
+                // show main menu and stop current game
+                showMainMenu();
+            });
+
+            // Volume slider
+            const vol = document.getElementById('volumeSlider');
+            vol.addEventListener('input', (e) => {
+                window.GameVolume = Number(e.target.value) / 100.0;
+            });
+
+            // Clicking canvas focuses input
+            const c = document.getElementById('myCanvas');
+            c.addEventListener('mousedown', () => c.focus());
+
+            // Show main menu on load
+            showMainMenu();
+
+            // Toggle pause with Escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' || e.keyCode === 27) {
+                    // only toggle if a game is initialized
+                    if (typeof Init === 'function') {
+                        togglePause();
+                    }
+                }
+            });
+        };
+    </script>
+</body>
+</html>
