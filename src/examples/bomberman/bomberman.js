@@ -15,6 +15,13 @@ class BombermanGame extends Game {
         this.player1 = { x: 1, y: 1, lives: 3, moveTimer: 0, maxBombs: 1, bombsPlaced: 0, shield: false };
         this.player2 = { x: this.cols - 2, y: this.rows - 2, lives: 3, moveTimer: 0, maxBombs: 1, bombsPlaced: 0, shield: false };
 
+        // animation state per player (will be initialized/reset in Start())
+        // dir: 0=forward(down),1=left,2=right,3=back(up)
+        // animFrame: current frame index (0..frameCount-1), animTimer: time accumulator
+        // isMoving: whether player moved in last tick
+        this.player1.anim = { dir:0, animFrame:0, animTimer:0, frameDuration:0.12, frameCount:3, isMoving:false };
+        this.player2.anim = { dir:0, animFrame:0, animTimer:0, frameDuration:0.12, frameCount:3, isMoving:false };
+
         this.moveInterval = 0.14; // seconds per tile move
 
         // default bomb settings (used for timer and animation length)
@@ -75,6 +82,9 @@ class BombermanGame extends Game {
         // Reset players and game state
         this.player1.x = 1; this.player1.y = 1; this.player1.lives = 3; this.player1.moveTimer = 0; this.player1.maxBombs = 1; this.player1.bombsPlaced = 0; this.player1.shield = false;
         this.player2.x = this.cols - 2; this.player2.y = this.rows - 2; this.player2.lives = 3; this.player2.moveTimer = 0; this.player2.maxBombs = 1; this.player2.bombsPlaced = 0; this.player2.shield = false;
+        // reset animation state
+        this.player1.anim.dir = 0; this.player1.anim.animFrame = 1; this.player1.anim.animTimer = 0; this.player1.anim.isMoving = false;
+        this.player2.anim.dir = 0; this.player2.anim.animFrame = 1; this.player2.anim.animTimer = 0; this.player2.anim.isMoving = false;
         this.bombs = [];
         this.explosions = [];
         this.powerups = [];
@@ -165,15 +175,42 @@ class BombermanGame extends Game {
                 const ny = player.y;
                 if (!this.IsBlocked(nx, ny) && !this.IsBombAt(nx, ny)) {
                     player.x = nx; moved = true;
+                    // set animation direction (left/right)
+                    player.anim.dir = ax > 0 ? 2 : 1;
                 }
             } else if (ay !== 0) {
                 const nx = player.x;
                 const ny = player.y + (ay > 0 ? 1 : -1);
                 if (!this.IsBlocked(nx, ny) && !this.IsBombAt(nx, ny)) {
                     player.y = ny; moved = true;
+                    // set animation direction (down/up)
+                    player.anim.dir = ay > 0 ? 0 : 3;
                 }
             }
-            if (moved) player.moveTimer = 0;
+            if (moved) {
+                player.moveTimer = 0;
+                player.anim.isMoving = true;
+                // ensure animation starts at frame 0
+                player.anim.animFrame = 0;
+                player.anim.animTimer = 0;
+            } else {
+                player.anim.isMoving = false;
+            }
+        }
+    }
+
+    UpdatePlayerAnimation(player, deltaTime) {
+        const a = player.anim;
+        if (a.isMoving) {
+            a.animTimer += deltaTime;
+            if (a.animTimer >= a.frameDuration) {
+                a.animFrame = (a.animFrame + 1) % a.frameCount;
+                a.animTimer = 0;
+            }
+        } else {
+            // idle frame in the middle (1) for 3-frame animations
+            a.animFrame = Math.min(1, a.frameCount - 1);
+            a.animTimer = 0;
         }
     }
 
@@ -209,7 +246,8 @@ class BombermanGame extends Game {
             this.player1.x = 1; this.player1.y = 1;
             if (window.BombermanAssets && window.BombermanAssets.playDeath) window.BombermanAssets.playDeath();
             if (this.player1.lives <= 0) {
-                this.GameOver();
+                // player2 wins
+                this.GameOver(2);
             }
         } else if (playerIndex === 2) {
             if (this._p2Invulnerable) return;
@@ -227,17 +265,27 @@ class BombermanGame extends Game {
             this.player2.x = this.cols - 2; this.player2.y = this.rows - 2;
             if (window.BombermanAssets && window.BombermanAssets.playDeath) window.BombermanAssets.playDeath();
             if (this.player2.lives <= 0) {
-                this.GameOver();
+                // player1 wins
+                this.GameOver(1);
             }
         }
     }
 
     GameOver() {
+        // if called without winner, just set game over
         this.gameOver = true;
         if (window.BombermanAssets && window.BombermanAssets.playDeath) window.BombermanAssets.playDeath();
-        // simple text - the HUD will still show 0 lives
-        const text = new TextLabel("GAME OVER - Click Start to restart", new Vector2(this.config.screenWidth / 2, this.config.screenHeight / 2), "20px Arial", Color.black, "center", "middle", false);
-        text.Draw(this.renderer);
+        // if an overlay function exists in the page, invoke it with the winner id
+        if (arguments.length > 0) {
+            const winner = arguments[0];
+            if (typeof window.ShowGameOver === 'function') {
+                window.ShowGameOver(winner);
+            }
+        } else {
+            // fallback: draw simple text
+            const text = new TextLabel("GAME OVER - Click Start to restart", new Vector2(this.config.screenWidth / 2, this.config.screenHeight / 2), "20px Arial", Color.black, "center", "middle", false);
+            text.Draw(this.renderer);
+        }
     }
 
     IsBombAt(x, y) { return this.bombs.some(b => b.x === x && b.y === y); }
@@ -393,16 +441,46 @@ class BombermanGame extends Game {
         if (this.player1.shield) {
             this.renderer.DrawStrokeBasicRectangle(p1x + pad/2 - 2, p1y + pad/2 - 2, this.cellSize - pad + 4, this.cellSize - pad + 4, Color.FromRGB(135,206,250), 3);
         }
-        this.renderer.DrawFillBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.cyan);
-        this.renderer.DrawStrokeBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.black, 2);
+        // draw player1 using selected sprite sheet if available
+        const p1Sheet = (window.BombermanAssets && window.BombermanAssets.playerSpriteP1) ? window.BombermanAssets.playerSpriteP1 : null;
+        if (p1Sheet && p1Sheet.complete && typeof this.renderer.DrawImageSectionBasic === 'function') {
+            const frameW = 64, frameH = 64;
+            const destW = Math.floor(this.cellSize - pad);
+            const destH = destW;
+            const bx = p1x + Math.floor((this.cellSize - destW) / 2);
+            const by = p1y + Math.floor((this.cellSize - destH) / 2);
+            const sx = this.player1.anim.animFrame * frameW;
+            const sy = this.player1.anim.dir * frameH;
+            const scaleX = destW / frameW;
+            const scaleY = destH / frameH;
+            this.renderer.DrawImageSectionBasic(p1Sheet, bx, by, sx, sy, frameW, frameH, scaleX, scaleY);
+        } else {
+            this.renderer.DrawFillBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.cyan);
+            this.renderer.DrawStrokeBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.black, 2);
+        }
 
         const p2x = this.offsetX + this.player2.x * this.cellSize;
         const p2y = this.offsetY + this.player2.y * this.cellSize;
         if (this.player2.shield) {
             this.renderer.DrawStrokeBasicRectangle(p2x + pad/2 - 2, p2y + pad/2 - 2, this.cellSize - pad + 4, this.cellSize - pad + 4, Color.FromRGB(135,206,250), 3);
         }
-        this.renderer.DrawFillBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.purple);
-        this.renderer.DrawStrokeBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.white, 2);
+        // draw player2 using selected sprite sheet if available
+        const p2Sheet = (window.BombermanAssets && window.BombermanAssets.playerSpriteP2) ? window.BombermanAssets.playerSpriteP2 : null;
+        if (p2Sheet && p2Sheet.complete && typeof this.renderer.DrawImageSectionBasic === 'function') {
+            const frameW = 64, frameH = 64;
+            const destW = Math.floor(this.cellSize - pad);
+            const destH = destW;
+            const bx = p2x + Math.floor((this.cellSize - destW) / 2);
+            const by = p2y + Math.floor((this.cellSize - destH) / 2);
+            const sx = this.player2.anim.animFrame * frameW;
+            const sy = this.player2.anim.dir * frameH;
+            const scaleX = destW / frameW;
+            const scaleY = destH / frameH;
+            this.renderer.DrawImageSectionBasic(p2Sheet, bx, by, sx, sy, frameW, frameH, scaleX, scaleY);
+        } else {
+            this.renderer.DrawFillBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.purple);
+            this.renderer.DrawStrokeBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.white, 2);
+        }
 
         // HUD
         this.hud.Draw(this.renderer);

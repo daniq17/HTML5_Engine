@@ -97,6 +97,41 @@
         #pauseOverlay button {
             padding: 8px 16px;
         }
+
+        /* Game Over Overlay styles */
+        #gameOverOverlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1001;
+        }
+
+        #gameOverOverlay > div {
+            background: #fff;
+            padding: 28px;
+            border-radius: 8px;
+            width: 420px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        #gameOverOverlay h2 {
+            margin: 0 0 10px;
+            font-size: 28px;
+        }
+
+        #gameOverOverlay p {
+            margin: 6px 0 18px;
+            font-size: 18px;
+            color: #333;
+        }
+
+        #gameOverOverlay button {
+            padding: 8px 16px;
+        }
     </style>
 </head>
 <body>
@@ -110,10 +145,37 @@
 
     <!-- Main Menu -->
     <div id="mainMenu" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);">
-        <div style="background:#fff; padding:30px 40px; border-radius:8px; text-align:center; box-shadow:0 6px 18px rgba(0,0,0,0.3);">
-            <h1 style="margin:0; font-size:48px;">WastedChef</h1>
-            <p style="margin:6px 0 20px; font-size:20px; color:#666;">Who Gave Them Bombs?</p>
-            <button id="menuPlayBtn" style="padding:10px 24px; font-size:18px;">Play</button>
+        <div style="background:#fff; padding:20px 26px; border-radius:8px; text-align:center; box-shadow:0 6px 18px rgba(0,0,0,0.3); max-width:520px;">
+            <h1 style="margin:0; font-size:40px;">WastedChef</h1>
+            <p style="margin:6px 0 12px; font-size:16px; color:#666;">Who Gave Them Bombs?</p>
+            <div style="display:flex; gap:12px; justify-content:center; margin-bottom:12px;">
+                <div style="text-align:left;">
+                    <label for="p1Color">Player 1:</label><br />
+                    <select id="p1Color">
+                        <option value="blue">Blue</option>
+                        <option value="brown">Brown</option>
+                        <option value="green">Green</option>
+                        <option value="pink">Pink</option>
+                        <option value="purple">Purple</option>
+                        <option value="yellow">Yellow</option>
+                    </select>
+                </div>
+                <div style="text-align:left;">
+                    <label for="p2Color">Player 2:</label><br />
+                    <select id="p2Color">
+                        <option value="blue">Blue</option>
+                        <option value="brown">Brown</option>
+                        <option value="green">Green</option>
+                        <option value="pink">Pink</option>
+                        <option value="purple" selected>Purple</option>
+                        <option value="yellow">Yellow</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <button id="menuPlayBtn" style="padding:10px 24px; font-size:18px;">Play</button>
+            </div>
+            <div style="font-size:12px; color:#888;">Choose each player's color before starting.</div>
         </div>
     </div>
 
@@ -126,6 +188,18 @@
             <div style="display:flex; gap:8px; justify-content:center;">
                 <button id="resumeBtn" style="padding:8px 16px;">Resume</button>
                 <button id="menuBtn" style="padding:8px 16px;">Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="gameOverOverlay" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index: 1001;">
+        <div style="background:#fff; padding:28px; border-radius:8px; width:420px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+            <h2 id="gameOverTitle" style="margin:0 0 10px; font-size:28px;">Game Over</h2>
+            <p id="gameOverMessage" style="margin:6px 0 18px; font-size:18px; color:#333;">Player 1 Wins</p>
+            <div style="display:flex; gap:12px; justify-content:center;">
+                <button id="gameOverMenuBtn" style="padding:8px 16px;">Menu</button>
+                <button id="gameOverRestartBtn" style="padding:8px 16px;">Restart</button>
             </div>
         </div>
     </div>
@@ -167,16 +241,27 @@
         const wallImage = new Image(); wallImage.src = wallSVG;
         const enemyImage = new Image(); enemyImage.src = enemySVG;
 
+        // Load player sprite sheets (multiple color choices)
+        const playerColors = ['blue','brown','green','pink','purple','yellow'];
+        const playerSheets = {};
+        playerColors.forEach(col => {
+            const img = new Image();
+            img.src = `src/examples/bomberman/assets/${col}Player.png`;
+            playerSheets[col] = img;
+        });
+
+        // Create previews mapping (optional)
+        const playerSpritePreview = {
+            p1: playerSheets.blue,
+            p2: playerSheets.purple
+        };
+
         // bomb sprite sheet (4 frames 16x16 in a 64x16 image)
         const bombSprites = new Image(); bombSprites.src = "src/examples/bomberman/assets/bomb_sprites.png";
 
         // Simple synthesized sounds via WebAudio for place bomb and explosion and death
         let audioCtx = null;
 
-        // Global audio volume (0.0 - 1.0)
-        window.GameVolume = 1.0;
-
-        // Modify audio functions to respect GameVolume
         function ensureAudio() {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -189,8 +274,13 @@
             const g = audioCtx.createGain();
             o.type = 'triangle';
             o.frequency.setValueAtTime(440, audioCtx.currentTime);
+            // sanitize volume
+            let vol = Number(window.GameVolume);
+            if (!isFinite(vol) || vol <= 0) vol = 1.0;
+            vol = Math.max(0.0001, vol);
             g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.09 * window.GameVolume, audioCtx.currentTime + 0.02);
+            // use finite positive target for exponential ramp
+            g.gain.exponentialRampToValueAtTime(0.09 * vol, audioCtx.currentTime + 0.02);
             g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
             o.connect(g); g.connect(audioCtx.destination);
             o.start(); o.stop(audioCtx.currentTime + 0.22);
@@ -202,8 +292,12 @@
             const g = audioCtx.createGain();
             o.type = 'sawtooth';
             o.frequency.setValueAtTime(120, audioCtx.currentTime);
+            // sanitize volume
+            let vol = Number(window.GameVolume);
+            if (!isFinite(vol) || vol <= 0) vol = 1.0;
+            vol = Math.max(0.0001, vol);
             g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.3 * window.GameVolume, audioCtx.currentTime + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.3 * vol, audioCtx.currentTime + 0.01);
             g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
             o.connect(g); g.connect(audioCtx.destination);
             o.start(); o.stop(audioCtx.currentTime + 0.6);
@@ -215,8 +309,12 @@
             const g = audioCtx.createGain();
             o.type = 'square';
             o.frequency.setValueAtTime(200, audioCtx.currentTime);
+            // sanitize volume
+            let vol = Number(window.GameVolume);
+            if (!isFinite(vol) || vol <= 0) vol = 1.0;
+            vol = Math.max(0.0001, vol);
             g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.2 * window.GameVolume, audioCtx.currentTime + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.2 * vol, audioCtx.currentTime + 0.01);
             g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.7);
             o.connect(g); g.connect(audioCtx.destination);
             o.start(); o.stop(audioCtx.currentTime + 0.7);
@@ -224,9 +322,17 @@
 
         // Expose assets globally so src/examples/bomberman/bomberman.js can use them if it checks window.BombermanAssets
         window.BombermanAssets = {
-            playerImage, bombImage, brickImage, wallImage, enemyImage, bombSprites,
-            playPlaceBomb, playExplosion, playDeath
+            playerSheets, // map of color -> Image
+            playerSpritePreview,
+            playerSpriteP1: playerSheets.blue,
+            playerSpriteP2: playerSheets.purple,
+            playerImage, bombImage, brickImage, wallImage, enemyImage, bombSprites
         };
+
+        // attach audio helper functions after the object exists (avoids ReferenceError if functions weren't parsed yet)
+        window.BombermanAssets.playPlaceBomb = playPlaceBomb;
+        window.BombermanAssets.playExplosion = playExplosion;
+        window.BombermanAssets.playDeath = playDeath;
 
         function showMainMenu() {
             document.getElementById('mainMenu').style.display = 'flex';
@@ -258,17 +364,34 @@
             }
         }
 
+        // when starting the game apply selected player sheets
+        function ApplyPlayerSelections() {
+            const p1 = document.getElementById('p1Color').value;
+            const p2 = document.getElementById('p2Color').value;
+            if (window.BombermanAssets && window.BombermanAssets.playerSheets) {
+                window.BombermanAssets.playerSpriteP1 = window.BombermanAssets.playerSheets[p1] || window.BombermanAssets.playerSpriteP1;
+                window.BombermanAssets.playerSpriteP2 = window.BombermanAssets.playerSheets[p2] || window.BombermanAssets.playerSpriteP2;
+            }
+        }
+
+        // Hook into existing start handlers to apply selection before Init
+        const originalMenuPlay = window.menuPlayBtnClick;
+
         // Start the page
         window.onload = () => {
+            // ensure selects default match BombermanAssets
+            const p1s = document.getElementById('p1Color'); if (p1s) p1s.value = 'blue';
+            const p2s = document.getElementById('p2Color'); if (p2s) p2s.value = 'purple';
             // Start button (keeps old behaviour as restart)
             document.getElementById('startBtn').addEventListener('click', () => {
+                ApplyPlayerSelections();
                 Init(BombermanGame);
                 document.getElementById('mainMenu').style.display = 'none';
                 window.GamePaused = false;
             });
 
             // Main menu Play button
-            document.getElementById('menuPlayBtn').addEventListener('click', () => startGameFromMenu());
+            document.getElementById('menuPlayBtn').addEventListener('click', () => { ApplyPlayerSelections(); startGameFromMenu(); });
 
             // Pause overlay buttons
             document.getElementById('resumeBtn').addEventListener('click', () => togglePause());
@@ -280,7 +403,8 @@
             // Volume slider
             const vol = document.getElementById('volumeSlider');
             vol.addEventListener('input', (e) => {
-                window.GameVolume = Number(e.target.value) / 100.0;
+                const v = Number(e.target.value);
+                window.GameVolume = isFinite(v) ? v / 100.0 : 1.0;
             });
 
             // Clicking canvas focuses input
@@ -300,6 +424,43 @@
                 }
             });
         };
+
+        // Show game over overlay with winner id (1 or 2)
+        function ShowGameOver(winner) {
+            const overlay = document.getElementById('gameOverOverlay');
+            const msg = document.getElementById('gameOverMessage');
+            const title = document.getElementById('gameOverTitle');
+            title.textContent = 'Game Over';
+            msg.textContent = winner === 1 ? 'Player 1 Wins' : 'Player 2 Wins';
+            overlay.style.display = 'flex';
+            // pause game loop
+            window.GamePaused = true;
+        }
+
+        function HideGameOver() {
+            const overlay = document.getElementById('gameOverOverlay');
+            overlay.style.display = 'none';
+            window.GamePaused = false;
+        }
+
+        // Hook overlay buttons
+        document.addEventListener('DOMContentLoaded', () => {
+            const menuBtn = document.getElementById('gameOverMenuBtn');
+            const restartBtn = document.getElementById('gameOverRestartBtn');
+            if (menuBtn) menuBtn.addEventListener('click', () => {
+                HideGameOver();
+                // show main menu overlay
+                showMainMenu();
+            });
+            if (restartBtn) restartBtn.addEventListener('click', () => {
+                HideGameOver();
+                // restart the game
+                ApplyPlayerSelections();
+                Init(BombermanGame);
+                document.getElementById('mainMenu').style.display = 'none';
+                window.GamePaused = false;
+            });
+        });
     </script>
 </body>
 </html>
