@@ -93,6 +93,20 @@ class BombermanGame extends Game {
         this._p2Invulnerable = false;
         this.gameOver = false;
 
+        // Create SSAnimation objects for players (use 1-frame per direction so they don't loop)
+        const p1Img = (window.BombermanAssets && window.BombermanAssets.playerSpriteP1) ? window.BombermanAssets.playerSpriteP1 : null;
+        const p2Img = (window.BombermanAssets && window.BombermanAssets.playerSpriteP2) ? window.BombermanAssets.playerSpriteP2 : null;
+        // frameWidth/frameHeight are 64x64, 4 directions (rows), 1 frame each => [1,1,1,1]
+        // Use slightly reduced scale (0.8) and shift pivot on Y
+        this.player1.animObj = new SSAnimationObjectBasic(new Vector2(this.offsetX + this.player1.x * this.cellSize + this.cellSize/2, this.offsetY + this.player1.y * this.cellSize + this.cellSize/2), 0, 0.8, p1Img, 64, 64, [1,1,1,1], 1);
+        this.player2.animObj = new SSAnimationObjectBasic(new Vector2(this.offsetX + this.player2.x * this.cellSize + this.cellSize/2, this.offsetY + this.player2.y * this.cellSize + this.cellSize/2), 0, 0.8, p2Img, 64, 64, [1,1,1,1], 1);
+        // Crop out an extra top pixel row from player sprites (source offset Y = 1)
+        if (this.player1.animObj) this.player1.animObj.sourceOffset = new Vector2(0, 1);
+        if (this.player2.animObj) this.player2.animObj.sourceOffset = new Vector2(0, 1);
+        // move the pivot point higher on the sprite by 10 pixels (anchor up)
+        if (this.player1.animObj && this.player1.animObj.sprite) this.player1.animObj.sprite.pivot.y = 10;
+        if (this.player2.animObj && this.player2.animObj.sprite) this.player2.animObj.sprite.pivot.y = 10;
+
         this.hud = new TextLabel(`P1 Lives: ${this.player1.lives}  Bombs: ${this.player1.bombsPlaced}/${this.player1.maxBombs}  Shield: ${this.player1.shield ? 'YES' : 'NO'}    ` +
                                  `P2 Lives: ${this.player2.lives}  Bombs: ${this.player2.bombsPlaced}/${this.player2.maxBombs}  Shield: ${this.player2.shield ? 'YES' : 'NO'}`,
                                  new Vector2(12, 18), "16px Arial", Color.black, "left", "middle", false);
@@ -113,14 +127,27 @@ class BombermanGame extends Game {
         // Place bombs for both players (respect maxBombs)
         if (Input.GetActionDown("P1_PlaceBomb")) {
             if (this.player1.bombsPlaced < this.player1.maxBombs && !this.bombs.some(b => b.x === this.player1.x && b.y === this.player1.y)) {
-                this.bombs.push({ x: this.player1.x, y: this.player1.y, timer: this.defaultBombTimer, animTotal: this.defaultBombTimer, range: this.defaultBombRange, owner: 1 });
+                // create bomb with SSAnimation attached
+                const bx = this.offsetX + this.player1.x * this.cellSize + Math.floor(this.cellSize/2);
+                const by = this.offsetY + this.player1.y * this.cellSize + Math.floor(this.cellSize/2);
+                const bombImg = (window.BombermanAssets && window.BombermanAssets.bombSprites) ? window.BombermanAssets.bombSprites : null;
+                const bObj = { x: this.player1.x, y: this.player1.y, timer: this.defaultBombTimer, animTotal: this.defaultBombTimer, range: this.defaultBombRange, owner: 1 };
+                // scale 2.0 to render bomb frames twice their original size
+                if (bombImg) bObj.anim = new SSAnimationObjectBasic(new Vector2(bx, by), 0, 2.0, bombImg, 16, 16, [4], (this.defaultBombTimer / 4));
+                this.bombs.push(bObj);
                 this.player1.bombsPlaced++;
                 if (window.BombermanAssets && window.BombermanAssets.playPlaceBomb) window.BombermanAssets.playPlaceBomb();
             }
         }
         if (Input.GetActionDown("P2_PlaceBomb")) {
             if (this.player2.bombsPlaced < this.player2.maxBombs && !this.bombs.some(b => b.x === this.player2.x && b.y === this.player2.y)) {
-                this.bombs.push({ x: this.player2.x, y: this.player2.y, timer: this.defaultBombTimer, animTotal: this.defaultBombTimer, range: this.defaultBombRange, owner: 2 });
+                const bx = this.offsetX + this.player2.x * this.cellSize + Math.floor(this.cellSize/2);
+                const by = this.offsetY + this.player2.y * this.cellSize + Math.floor(this.cellSize/2);
+                const bombImg = (window.BombermanAssets && window.BombermanAssets.bombSprites) ? window.BombermanAssets.bombSprites : null;
+                const bObj = { x: this.player2.x, y: this.player2.y, timer: this.defaultBombTimer, animTotal: this.defaultBombTimer, range: this.defaultBombRange, owner: 2 };
+                // scale 2.0 to render bomb frames twice their original size
+                if (bombImg) bObj.anim = new SSAnimationObjectBasic(new Vector2(bx, by), 0, 2.0, bombImg, 16, 16, [4], (this.defaultBombTimer / 4));
+                this.bombs.push(bObj);
                 this.player2.bombsPlaced++;
                 if (window.BombermanAssets && window.BombermanAssets.playPlaceBomb) window.BombermanAssets.playPlaceBomb();
             }
@@ -130,6 +157,14 @@ class BombermanGame extends Game {
         for (let i = this.bombs.length - 1; i >= 0; i--) {
             const b = this.bombs[i];
             b.timer -= deltaTime;
+            // update attached animation if present
+            if (b.anim) {
+                // update animation position to the center of the tile
+                const px = this.offsetX + b.x * this.cellSize + Math.floor(this.cellSize/2);
+                const py = this.offsetY + b.y * this.cellSize + Math.floor(this.cellSize/2);
+                b.anim.position = new Vector2(px, py);
+                b.anim.Update(deltaTime);
+            }
             if (b.timer <= 0) {
                 // free owner's bomb slot
                 if (b.owner === 1) this.player1.bombsPlaced = Math.max(0, this.player1.bombsPlaced - 1);
@@ -375,44 +410,13 @@ class BombermanGame extends Game {
 
         // draw bombs
         for (const b of this.bombs) {
-            const px = this.offsetX + b.x * this.cellSize;
-            const py = this.offsetY + b.y * this.cellSize;
-
-            // Animation: sprite sheet 4 frames (16x16) in a 64x16 image
-            const sheet = window.BombermanAssets && window.BombermanAssets.bombSprites ? window.BombermanAssets.bombSprites : null;
-            const frameCount = 4;
-            const frameW = 16, frameH = 16;
-
-            // compute progress from start to explosion
-            const total = b.animTotal || this.defaultBombTimer; // fallback to default
-            const progress = Math.max(0, Math.min(1, 1 - (b.timer / total)));
-            let frame = Math.floor(progress * frameCount);
-            if (frame >= frameCount) frame = frameCount - 1;
-
-            const destW = Math.floor(this.cellSize * 0.6);
-            const destH = destW;
-            const bx = px + Math.floor((this.cellSize - destW) / 2); // top-left for DrawImageSectionBasic
-            const by = py + Math.floor((this.cellSize - destH) / 2);
-
-            // compute scale factors expected by renderer methods (they expect scales, not pixel sizes)
-            const scaleX = destW / frameW;
-            const scaleY = destH / frameH;
-
-            if (sheet && sheet.complete && typeof this.renderer.DrawImageSectionBasic === 'function') {
-                // DrawImageSectionBasic(img, x, y, sx, sy, sw, sh, scaleX, scaleY)
-                const sx = frame * frameW;
-                const sy = 0;
-                this.renderer.DrawImageSectionBasic(sheet, bx, by, sx, sy, frameW, frameH, scaleX, scaleY);
-            }
-            else if (sheet && sheet.complete && typeof this.renderer.DrawImageSection === 'function') {
-                // DrawImageSection expects the draw position to be the center for many renderer implementations
-                const sx = frame * frameW;
-                const sy = 0;
-                const cx = px + Math.floor(this.cellSize / 2);
-                const cy = py + Math.floor(this.cellSize / 2);
-                this.renderer.DrawImageSection(sheet, cx, cy, sx, sy, frameW, frameH, scaleX, scaleY);
+            // use attached SSAnimation if present
+            if (b.anim && b.anim.img && b.anim.img.complete) {
+                b.anim.Draw(this.renderer);
             }
             else {
+                const px = this.offsetX + b.x * this.cellSize;
+                const py = this.offsetY + b.y * this.cellSize;
                 // fallback: colored square by owner
                 const bw = Math.floor(this.cellSize * 0.5);
                 const bh = bw;
@@ -441,20 +445,23 @@ class BombermanGame extends Game {
         if (this.player1.shield) {
             this.renderer.DrawStrokeBasicRectangle(p1x + pad/2 - 2, p1y + pad/2 - 2, this.cellSize - pad + 4, this.cellSize - pad + 4, Color.FromRGB(135,206,250), 3);
         }
-        // draw player1 using selected sprite sheet if available
-        const p1Sheet = (window.BombermanAssets && window.BombermanAssets.playerSpriteP1) ? window.BombermanAssets.playerSpriteP1 : null;
-        if (p1Sheet && p1Sheet.complete && typeof this.renderer.DrawImageSectionBasic === 'function') {
-            const frameW = 64, frameH = 64;
-            const destW = Math.floor(this.cellSize - pad);
-            const destH = destW;
-            const bx = p1x + Math.floor((this.cellSize - destW) / 2);
-            const by = p1y + Math.floor((this.cellSize - destH) / 2);
-            const sx = this.player1.anim.animFrame * frameW;
-            const sy = this.player1.anim.dir * frameH;
-            const scaleX = destW / frameW;
-            const scaleY = destH / frameH;
-            this.renderer.DrawImageSectionBasic(p1Sheet, bx, by, sx, sy, frameW, frameH, scaleX, scaleY);
-        } else {
+        // draw player1 using SSAnimation object if available
+        if (this.player1.animObj) {
+            const cx = p1x + Math.floor(this.cellSize / 2);
+            const cy = p1y + Math.floor(this.cellSize / 2);
+            this.player1.animObj.position = new Vector2(cx, cy);
+            // set proper animation row (direction)
+            this.player1.animObj.PlayAnimationLoop(this.player1.anim.dir, true);
+            if (this.player1.animObj.img && this.player1.animObj.img.complete) {
+                this.player1.animObj.Update(0); // no automatic frame progression for single-frame setup
+                this.player1.animObj.Draw(this.renderer);
+            }
+            else {
+                this.renderer.DrawFillBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.cyan);
+                this.renderer.DrawStrokeBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.black, 2);
+            }
+        }
+        else {
             this.renderer.DrawFillBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.cyan);
             this.renderer.DrawStrokeBasicRectangle(p1x + pad/2, p1y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.black, 2);
         }
@@ -464,20 +471,22 @@ class BombermanGame extends Game {
         if (this.player2.shield) {
             this.renderer.DrawStrokeBasicRectangle(p2x + pad/2 - 2, p2y + pad/2 - 2, this.cellSize - pad + 4, this.cellSize - pad + 4, Color.FromRGB(135,206,250), 3);
         }
-        // draw player2 using selected sprite sheet if available
-        const p2Sheet = (window.BombermanAssets && window.BombermanAssets.playerSpriteP2) ? window.BombermanAssets.playerSpriteP2 : null;
-        if (p2Sheet && p2Sheet.complete && typeof this.renderer.DrawImageSectionBasic === 'function') {
-            const frameW = 64, frameH = 64;
-            const destW = Math.floor(this.cellSize - pad);
-            const destH = destW;
-            const bx = p2x + Math.floor((this.cellSize - destW) / 2);
-            const by = p2y + Math.floor((this.cellSize - destH) / 2);
-            const sx = this.player2.anim.animFrame * frameW;
-            const sy = this.player2.anim.dir * frameH;
-            const scaleX = destW / frameW;
-            const scaleY = destH / frameH;
-            this.renderer.DrawImageSectionBasic(p2Sheet, bx, by, sx, sy, frameW, frameH, scaleX, scaleY);
-        } else {
+        // draw player2 using SSAnimation object if available
+        if (this.player2.animObj) {
+            const cx2 = p2x + Math.floor(this.cellSize / 2);
+            const cy2 = p2y + Math.floor(this.cellSize / 2);
+            this.player2.animObj.position = new Vector2(cx2, cy2);
+            this.player2.animObj.PlayAnimationLoop(this.player2.anim.dir, true);
+            if (this.player2.animObj.img && this.player2.animObj.img.complete) {
+                this.player2.animObj.Update(0);
+                this.player2.animObj.Draw(this.renderer);
+            }
+            else {
+                this.renderer.DrawFillBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.purple);
+                this.renderer.DrawStrokeBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.white, 2);
+            }
+        }
+        else {
             this.renderer.DrawFillBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.purple);
             this.renderer.DrawStrokeBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.white, 2);
         }

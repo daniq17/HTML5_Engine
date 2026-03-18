@@ -218,14 +218,26 @@ class SSAnimationObjectBasic extends SpriteObject {
             this.actualFrameCountTime = 0;
         }
 
+        const offsetX = (this.sourceOffset && this.sourceOffset.x) ? this.sourceOffset.x : 0;
+        const offsetY = (this.sourceOffset && this.sourceOffset.y) ? this.sourceOffset.y : 0;
+        const sw = Math.max(0, this.frameWidth - offsetX);
+        const sh = Math.max(0, this.frameHeight - offsetY);
+
         this.spritePosition.Set(
-            this.position.x - this.frameWidth * this.scale.x * 0.5,
-            this.position.y - this.frameHeight * this.scale.y * 0.5
+            this.position.x - sw * this.scale.x * 0.5,
+            this.position.y - sh * this.scale.y * 0.5
         );
     }
 
     Draw(renderer) {
-        this.sprite.DrawSection(renderer, this.actualFrame * this.frameWidth, this.actualAnimation * this.frameHeight, this.frameWidth, this.frameHeight, 0, 0, this.frameWidth, this.frameHeight);
+        const offsetX = (this.sourceOffset && this.sourceOffset.x) ? this.sourceOffset.x : 0;
+        const offsetY = (this.sourceOffset && this.sourceOffset.y) ? this.sourceOffset.y : 0;
+        const sx = this.actualFrame * this.frameWidth + offsetX;
+        const sy = this.actualAnimation * this.frameHeight + offsetY;
+        const sw = Math.max(0, this.frameWidth - offsetX);
+        const sh = Math.max(0, this.frameHeight - offsetY);
+
+        this.sprite.DrawSection(renderer, sx, sy, sw, sh, 0, 0, sw, sh);
     }
 
     PlayAnimationLoop(animationId, resetToFrame0=true) {
