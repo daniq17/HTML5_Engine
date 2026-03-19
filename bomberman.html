@@ -69,6 +69,9 @@
             background: rgba(0, 0, 0, 0.5);
         }
 
+        /* Remove any accidental borders/outlines around overlays and panels */
+        #mainMenu, #mainMenu > div, #mainMenuPanel, #menuAnimCanvas { border: none !important; outline: none !important; }
+
         #mainMenu > div {
             background: #e97d00;
             padding: 30px 40px;
@@ -179,23 +182,33 @@
 
     <!-- Main Menu -->
     <div id="mainMenu" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);">
-        <div id="mainMenuPanel" style="width:600px; height:600px; box-sizing:border-box; background:#e97d00; border-radius:8px; text-align:center; box-shadow:0 6px 18px rgba(65,31,0,0.678); display:flex; flex-direction:column; align-items:center; justify-content:center; transform-origin:center;">
-            <h1 style="margin:0; font-size:40px;">BomberKids</h1>
-            <p style="margin:6px 0 12px; font-size:16px; color:#000000;">Who Gave Them Bombs?</p>
-            <div style="display:flex; gap:12px; justify-content:center; margin-bottom:12px;">
-                <div style="text-align:center;">
-                    <div style="font-size:12px; margin-bottom:6px;">Player 1</div>
-                    <img id="p1Thumb" src="" alt="P1" style="width:52px; height:52px; cursor:pointer; border-radius:6px; border:2px solid #5f2300;" title="Click to cycle colors" />
-                </div>
-                <div style="text-align:center;">
-                    <div style="font-size:12px; margin-bottom:6px;">Player 2</div>
-                    <img id="p2Thumb" src="" alt="P2" style="width:52px; height:52px; cursor:pointer; border-radius:6px; border:2px solid #5f2300;" title="Click to cycle colors" />
-                </div>
+        <div id="mainMenuPanel" style="width:600px; height:600px; box-sizing:border-box; background:#e97d00; border-radius:8px; text-align:center; box-shadow:0 6px 18px rgba(65,31,0,0.678); display:flex; flex-direction:column; align-items:center; justify-content:center; transform-origin:center; position:relative; overflow:visible;">
+            <!-- animation canvas overlays the panel and runs the intro sequence -->
+            <canvas id="menuAnimCanvas" width="600" height="600" style="position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; image-rendering: pixelated; background: transparent; -moz-image-rendering: pixelated; -webkit-image-rendering: pixelated;"></canvas>
+
+            <!-- Title & subtitle: hidden initially, revealed after the intro animation -->
+            <div id="menuTitles" style="position:relative; z-index:2;">
+                <h1 id="menuTitle" style="margin:0; font-size:40px; opacity:0; transition:opacity 800ms ease-in;">BomberKids</h1>
+                <p id="menuSubtitle" style="margin:6px 0 12px; font-size:16px; color:#000000; opacity:0; transition:opacity 800ms ease-in 400ms;">Who Gave Them Bombs?</p>
             </div>
-            <div style="margin-bottom:12px;">
-                <button id="menuPlayBtn" style="padding:10px 24px; font-size:18px;">Play</button>
+
+            <!-- Main content hidden initially; slides up when shown -->
+            <div id="menuContent" style="position:relative; z-index:2; transform:translateY(40px); opacity:0; transition:transform 900ms cubic-bezier(.23,1,.32,1), opacity 700ms ease-in; display:flex; flex-direction:column; align-items:center;">
+                <div style="display:flex; gap:12px; justify-content:center; margin-bottom:12px;">
+                    <div style="text-align:center;">
+                        <div style="font-size:12px; margin-bottom:6px;">Player 1</div>
+                        <img id="p1Thumb" src="" alt="P1" style="width:52px; height:52px; cursor:pointer; border-radius:6px; border:2px solid #5f2300;" title="Click to cycle colors" />
+                    </div>
+                    <div style="text-align:center;">
+                        <div style="font-size:12px; margin-bottom:6px;">Player 2</div>
+                        <img id="p2Thumb" src="" alt="P2" style="width:52px; height:52px; cursor:pointer; border-radius:6px; border:2px solid #5f2300;" title="Click to cycle colors" />
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <button id="menuPlayBtn" style="padding:10px 24px; font-size:18px;">Play</button>
+                </div>
+                <div style="font-size:12px; color:#000000;">Choose each player's color before starting.</div>
             </div>
-            <div style="font-size:12px; color:#000000;">Choose each player's color before starting.</div>
         </div>
     </div>
 
@@ -412,6 +425,21 @@
             o.start(); o.stop(audioCtx.currentTime + 0.7);
         }
 
+        // keep master gain in sync with the UI slider
+        (function wireVolumeSlider() {
+            const slider = document.getElementById('volumeSlider');
+            if (!slider) return;
+            // ensure existing handlers still run; we add syncing for master gain
+            slider.addEventListener('input', (ev) => {
+                const v = Number(ev.target.value);
+                if (!isFinite(v)) return;
+                window.GameVolume = v;
+                if (audioMasterGain && audioCtx) {
+                    try { audioMasterGain.gain.setValueAtTime(Math.max(0, v), audioCtx.currentTime); } catch (e) { /* ignore */ }
+                }
+            });
+        })();
+
         // Expose assets globally so src/examples/bomberman/bomberman.js can use them if it checks window.BombermanAssets
         window.BombermanAssets = {
             playerSheets, // map of color -> Image
@@ -444,6 +472,8 @@
             document.getElementById('pauseOverlay').style.display = 'none';
             // pause the game loop
             window.GamePaused = true;
+            // start the animated intro for the main menu
+            try { startMainMenuIntro(); } catch (e) { /* ignore if function missing */ }
         }
 
         function hideMainMenu() {
@@ -629,6 +659,162 @@
             overlay.style.display = 'none';
             window.GamePaused = false;
         }
+
+        // --- Main Menu Intro Animation -------------------------------------------------
+        (function(){
+            let introPlaying = false;
+            let introPlayedOnce = false;
+
+            function drawBombFrame(ctx, img, frame, x, y, size) {
+                if (!img || !img.complete) return;
+                const fw = img.width / 4 || 16;
+                const fh = img.height || fw;
+                ctx.drawImage(img, frame * fw, 0, fw, fh, x - size/2, y - size/2, size, size);
+            }
+
+            function startMainMenuIntro() {
+                const panel = document.getElementById('mainMenuPanel');
+                if (!panel) return;
+                // if we've already played once, just reveal everything
+                if (introPlayedOnce) {
+                    const title = document.getElementById('menuTitle');
+                    const subtitle = document.getElementById('menuSubtitle');
+                    const content = document.getElementById('menuContent');
+                    if (title) title.style.opacity = 1;
+                    if (subtitle) subtitle.style.opacity = 1;
+                    if (content) { content.style.opacity = 1; content.style.transform = 'translateY(0)'; }
+                    return;
+                }
+                if (introPlaying) return;
+                introPlaying = true;
+
+                const canvas = document.getElementById('menuAnimCanvas');
+                if (!canvas) { introPlaying=false; introPlayedOnce=true; return; }
+                const ctx = canvas.getContext('2d');
+                const bombImg = window.BombermanAssets && window.BombermanAssets.bombSprites ? window.BombermanAssets.bombSprites : bombSprites;
+                const centerFire = window.BombermanAssets && window.BombermanAssets.centerFire ? window.BombermanAssets.centerFire : centerFireImg;
+                const middleFire = window.BombermanAssets && window.BombermanAssets.middleFire ? window.BombermanAssets.middleFire : middleFireImg;
+                const endFire = window.BombermanAssets && window.BombermanAssets.endFire ? window.BombermanAssets.endFire : endFireImg;
+
+                const baseW = 600, baseH = 600;
+                // target where the title is roughly positioned (panel center Y offset)
+                const centerX = baseW/2;
+                const titleY = 160; // landing Y
+
+                const bombSize = 64;
+                // slower timings for more dramatic effect
+                const dropDuration = 1200; // ms
+                const explodeDelay = 300; // ms after landing
+                const fireDuration = 1200; // ms
+
+                // doubled fire tile size and precompute positions so tiles sit flush
+                const fireTile = 32; // draw middleFire at 32x32 for pixel-perfect seams
+
+                let start = null;
+                let exploded = false;
+                let fireStart = null;
+
+                // prepare left/right fire centers so tiles touch with no center tile
+                const maxPieces = 4; // pieces each side
+                const firePositions = [];
+                for (let i = 1; i <= maxPieces; i++) {
+                    // left centers: centerX - (fireTile/2) - (i-1)*fireTile
+                    firePositions.push({ x: centerX - (fireTile/2) - (i-1)*fireTile, y: titleY });
+                }
+                for (let i = 1; i <= maxPieces; i++) {
+                    // right centers: centerX + (fireTile/2) + (i-1)*fireTile
+                    firePositions.push({ x: centerX + (fireTile/2) + (i-1)*fireTile, y: titleY });
+                }
+
+                // ensure pixelated drawing
+                try {
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.mozImageSmoothingEnabled = false;
+                    ctx.webkitImageSmoothingEnabled = false;
+                    ctx.msImageSmoothingEnabled = false;
+                } catch (e) {}
+
+                function frame(ts) {
+                    if (!start) start = ts;
+                    const elapsed = ts - start;
+                    // clear (transparent to show orange panel underneath)
+                    ctx.clearRect(0,0,baseW,baseH);
+
+                    if (elapsed < dropDuration) {
+                        // falling bomb: ease-out from startY to titleY
+                        const t = elapsed / dropDuration;
+                        const ease = 1 - Math.pow(1 - t, 3);
+                        const startY = -120;
+                        const y = startY + (titleY - startY) * ease;
+                        // animate bomb frame (slower) based on time
+                        const frameDt = 300; // ms per frame
+                        const animFrame = Math.floor((elapsed / frameDt) % 4);
+                        // draw bomb with pixel-perfect scaling
+                        ctx.save();
+                        try { ctx.imageSmoothingEnabled = false; } catch (e) {}
+                        drawBombFrame(ctx, bombImg, animFrame, centerX, y, bombSize);
+                        ctx.restore();
+                    } else if (!exploded) {
+                        // landed: draw final bomb frame and schedule explosion
+                        ctx.save(); try { ctx.imageSmoothingEnabled = false; } catch (e) {}
+                        drawBombFrame(ctx, bombImg, 0, centerX, titleY, bombSize);
+                        ctx.restore();
+                        if (elapsed >= dropDuration + explodeDelay) {
+                            exploded = true;
+                            fireStart = ts;
+                            // play explosion sound
+                            try { if (window.BombermanAssets && window.BombermanAssets.playExplosion) window.BombermanAssets.playExplosion(); } catch (e) {}
+                        }
+                    } else {
+                        // explosion phase: spread left/right using only middle/end images (no center)
+                        const fe = ts - fireStart;
+                        const alpha = Math.max(0, 1 - (fe / fireDuration));
+                        ctx.globalAlpha = alpha;
+                        for (let i=0;i<firePositions.length;i++) {
+                            const pos = firePositions[i];
+                            // choose end sprite for outermost pieces, middle for inner
+                            let img = middleFire;
+                            if (i === 0 || i === firePositions.length - 1) img = endFire;
+                            if (img && img.complete) {
+                                ctx.save();
+                                try { ctx.imageSmoothingEnabled = false; } catch (e) {}
+                                ctx.drawImage(img, pos.x - fireTile/2, pos.y - fireTile/2, fireTile, fireTile);
+                                ctx.restore();
+                            }
+                        }
+                        ctx.globalAlpha = 1;
+                        if (fe >= fireDuration) {
+                            // end of intro
+                            ctx.clearRect(0,0,baseW,baseH);
+                            revealMenuTextAndContent();
+                            introPlaying = false;
+                            introPlayedOnce = true;
+                            return;
+                        }
+                    }
+                    requestAnimationFrame(frame);
+                }
+
+                function revealMenuTextAndContent() {
+                    const title = document.getElementById('menuTitle');
+                    const subtitle = document.getElementById('menuSubtitle');
+                    const content = document.getElementById('menuContent');
+                    if (title) title.style.opacity = 1;
+                    // subtitle fades in slightly after (CSS transition delay already applied)
+                    if (subtitle) subtitle.style.opacity = 1;
+                    // slide content up
+                    setTimeout(() => {
+                        if (content) { content.style.opacity = 1; content.style.transform = 'translateY(0)'; }
+                    }, 220);
+                }
+
+                // begin the animation loop
+                requestAnimationFrame(frame);
+            }
+
+            // expose function globally so showMainMenu can call it
+            window.startMainMenuIntro = startMainMenuIntro;
+        })();
 
         // Hook overlay buttons
         document.addEventListener('DOMContentLoaded', () => {
