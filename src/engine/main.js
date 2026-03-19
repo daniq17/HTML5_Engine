@@ -171,7 +171,7 @@ function DrawStats() {
         ctx.fillStyle = "white";
         ctx.textAlign = "start";
         ctx.textBaseline = "bottom"
-        ctx.font = "12px Comic Sans MS regular";
+        ctx.font = "12px pixelFont2";
 
         ctx.fillText("FPS: " + fps, 6, 16);
         ctx.fillText("FPS (dt): " + (1 / globalDT).toFixed(2), 6, 34);

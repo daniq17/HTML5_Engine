@@ -205,17 +205,21 @@ class SSAnimationObjectBasic extends SpriteObject {
         this.actualFrameCountTime = 0;
 
         this.spritePosition = new Vector2(0, 0); // only used if debugMode
+        this.playing = false; // whether the animation should advance frames
     }
 
     Update(deltaTime) {
         super.Update(deltaTime);
 
-        this.actualFrameCountTime += deltaTime;
-        if (this.actualFrameCountTime >= this.framesDuration) {
-            // update the animation with the new frame
-            this.actualFrame = (this.actualFrame + 1) % this.frameCount[this.actualAnimation];
+        // advance frames only when playing is true
+        if (this.playing) {
+            this.actualFrameCountTime += deltaTime;
+            if (this.actualFrameCountTime >= this.framesDuration) {
+                // update the animation with the new frame
+                this.actualFrame = (this.actualFrame + 1) % this.frameCount[this.actualAnimation];
 
-            this.actualFrameCountTime = 0;
+                this.actualFrameCountTime = 0;
+            }
         }
 
         const offsetX = (this.sourceOffset && this.sourceOffset.x) ? this.sourceOffset.x : 0;
@@ -242,8 +246,7 @@ class SSAnimationObjectBasic extends SpriteObject {
 
     PlayAnimationLoop(animationId, resetToFrame0=true) {
         this.actualAnimation = animationId;
-
-        if (resetToFrame0 || this.actualFrame >= this.frameCount[this.actualAnimation].length) {
+        if (resetToFrame0 || this.actualFrame >= this.frameCount[this.actualAnimation]) {
             // reset the frame count
             this.actualFrame = 0;
             this.actualFrameCountTime = 0;
