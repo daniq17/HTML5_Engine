@@ -1,3 +1,95 @@
+// WebAudio helpers for Bomberman SFX. Kept in JS so HTML only wires UI.
+window.BombermanAudio = (function createBombermanAudio() {
+    let audioCtx = null;
+    let audioMasterGain = null;
+
+    function ensureAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    function ensureMasterGain() {
+        ensureAudio();
+        if (!audioMasterGain) {
+            audioMasterGain = audioCtx.createGain();
+            const vol = (typeof window.GameVolume !== 'undefined') ? Number(window.GameVolume) : 1.0;
+            audioMasterGain.gain.setValueAtTime(isFinite(vol) ? Math.max(0, vol) : 1.0, audioCtx.currentTime);
+            audioMasterGain.connect(audioCtx.destination);
+        }
+    }
+
+    function getVolume() {
+        let vol = Number(window.GameVolume);
+        if (!isFinite(vol) || vol < 0) vol = 1.0;
+        return Math.max(0.0, vol);
+    }
+
+    function playPlaceBomb() {
+        ensureAudio();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(440, audioCtx.currentTime);
+        const vol = getVolume();
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.09 * Math.max(0.0001, vol), audioCtx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
+        o.connect(g);
+        ensureMasterGain();
+        g.connect(audioMasterGain);
+        o.start(); o.stop(audioCtx.currentTime + 0.22);
+    }
+
+    function playExplosion() {
+        ensureAudio();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(120, audioCtx.currentTime);
+        const vol = getVolume();
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.3 * Math.max(0.0001, vol), audioCtx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
+        o.connect(g);
+        ensureMasterGain();
+        g.connect(audioMasterGain);
+        o.start(); o.stop(audioCtx.currentTime + 0.6);
+    }
+
+    function playDeath() {
+        ensureAudio();
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'square';
+        o.frequency.setValueAtTime(200, audioCtx.currentTime);
+        const vol = getVolume();
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.2 * Math.max(0.0001, vol), audioCtx.currentTime + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.7);
+        o.connect(g);
+        ensureMasterGain();
+        g.connect(audioMasterGain);
+        o.start(); o.stop(audioCtx.currentTime + 0.7);
+    }
+
+    function setVolume(v) {
+        const vol = Number(v);
+        if (!isFinite(vol)) return;
+        window.GameVolume = Math.max(0, vol);
+        if (audioMasterGain && audioCtx) {
+            try { audioMasterGain.gain.setValueAtTime(Math.max(0, vol), audioCtx.currentTime); } catch (e) { }
+        }
+    }
+
+    return {
+        playPlaceBomb,
+        playExplosion,
+        playDeath,
+        setVolume
+    };
+})();
+
 class BombermanGame extends Game {
     constructor(renderer) {
         super(renderer);
