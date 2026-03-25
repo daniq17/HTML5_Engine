@@ -199,6 +199,8 @@
             document.getElementById('pauseOverlay').style.display = 'none';
             // pause the game loop
             window.GamePaused = true;
+            // play main menu music (looped)
+            try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('mainMenu'); } catch (e) {}
             // start the animated intro for the main menu
             try { startMainMenuIntro(); } catch (e) { /* ignore if function missing */ }
         }
@@ -207,12 +209,16 @@
             document.getElementById('mainMenu').style.display = 'none';
             // allow the game to run
             window.GamePaused = false;
+            // stop main menu music (game will start its own music)
+            try { if (window.BombermanAudio && typeof window.BombermanAudio.stopMusic === 'function') window.BombermanAudio.stopMusic(); } catch (e) {}
         }
 
         function startGameFromMenu() {
             hideMainMenu();
             // initialize the example game
             Init(BombermanGame);
+            // start game music (looped)
+            try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('game'); } catch (e) {}
         }
 
         function togglePause() {
@@ -375,12 +381,16 @@
             overlay.style.display = 'flex';
             // pause game loop
             window.GamePaused = true;
+            // play victory theme (looped)
+            try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('victory'); } catch (e) {}
         }
 
         function HideGameOver() {
             const overlay = document.getElementById('gameOverOverlay');
             overlay.style.display = 'none';
             window.GamePaused = false;
+            // stop victory theme when hiding game-over
+            try { if (window.BombermanAudio && typeof window.BombermanAudio.stopMusic === 'function') window.BombermanAudio.stopMusic(); } catch (e) {}
         }
 
 
@@ -560,6 +570,7 @@
                 Init(BombermanGame);
                 document.getElementById('mainMenu').style.display = 'none';
                 window.GamePaused = false;
+                try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('game'); } catch (e) {}
             });
         });
     </script>

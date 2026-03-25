@@ -1,92 +1,111 @@
 // WebAudio helpers for Bomberman SFX. Kept in JS so HTML only wires UI.
 window.BombermanAudio = (function createBombermanAudio() {
+    const basePath = 'src/examples/bomberman/assets/audio/';
+    const files = {
+        mainMenu: 'MainMenu.mp3',
+        game: 'GameMusic.mp3',
+        victory: 'VictoryTheme.mp3',
+        bomb: 'BombSoundEffect.mp3',
+        damage: 'DamageSoundEffect.mp3'
+    };
+
+    // Create HTMLAudioElements for music (looped) and sfx
+    const music = {
+        mainMenu: new Audio(basePath + files.mainMenu),
+        game: new Audio(basePath + files.game),
+        victory: new Audio(basePath + files.victory)
+    };
+    Object.values(music).forEach(a => { a.loop = true; a.preload = 'auto'; a.volume = (typeof window.GameVolume !== 'undefined') ? Number(window.GameVolume) : 1.0; });
+
+    const sfx = {
+        bomb: new Audio(basePath + files.bomb),
+        damage: new Audio(basePath + files.damage)
+    };
+    Object.values(sfx).forEach(a => { a.loop = false; a.preload = 'auto'; a.volume = (typeof window.GameVolume !== 'undefined') ? Number(window.GameVolume) : 1.0; });
+
+    let currentSfx = null;
+    let currentMusic = null;
+
+    function setVolume(v) {
+        const vol = Math.max(0, Math.min(1, Number(v)));
+        window.GameVolume = vol;
+        Object.values(music).forEach(a => { try { a.volume = vol; } catch (e) {} });
+        Object.values(sfx).forEach(a => { try { a.volume = vol; } catch (e) {} });
+    }
+
+    function stopCurrentSfx() {
+        if (currentSfx) {
+            try { currentSfx.pause(); currentSfx.currentTime = 0; } catch (e) {}
+            currentSfx = null;
+        }
+    }
+
+    function playSfx(name) {
+        stopCurrentSfx();
+        const a = sfx[name];
+        if (a) {
+            try { a.currentTime = 0; a.volume = window.GameVolume || 1.0; a.play().catch(()=>{}); currentSfx = a; } catch (e) {}
+        }
+    }
+
+    function playBomb() { playSfx('bomb'); }
+    function playDamage() { playSfx('damage'); }
+
+    function stopMusic() {
+        if (currentMusic) {
+            try { currentMusic.pause(); currentMusic.currentTime = 0; } catch (e) {}
+            currentMusic = null;
+        }
+    }
+
+    function playMusic(name) {
+        if (!name) return;
+        try {
+            if (currentMusic && currentMusic !== music[name]) {
+                currentMusic.pause();
+                currentMusic.currentTime = 0;
+            }
+        } catch (e) {}
+        const m = music[name];
+        if (m) {
+            m.volume = window.GameVolume || 1.0;
+            currentMusic = m;
+            m.play().catch(()=>{});
+        }
+    }
+
+    // Keep a small oscillator fallback for the place-bomb sound if no file exists
     let audioCtx = null;
-    let audioMasterGain = null;
-
-    function ensureAudio() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-    }
-
-    function ensureMasterGain() {
-        ensureAudio();
-        if (!audioMasterGain) {
-            audioMasterGain = audioCtx.createGain();
+    function ensureAudioCtx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    function playPlaceBombOsc() {
+        ensureAudioCtx();
+        try {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.type = 'triangle';
+            o.frequency.setValueAtTime(440, audioCtx.currentTime);
             const vol = (typeof window.GameVolume !== 'undefined') ? Number(window.GameVolume) : 1.0;
-            audioMasterGain.gain.setValueAtTime(isFinite(vol) ? Math.max(0, vol) : 1.0, audioCtx.currentTime);
-            audioMasterGain.connect(audioCtx.destination);
-        }
-    }
-
-    function getVolume() {
-        let vol = Number(window.GameVolume);
-        if (!isFinite(vol) || vol < 0) vol = 1.0;
-        return Math.max(0.0, vol);
+            g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.09 * Math.max(0.0001, vol), audioCtx.currentTime + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
+            o.connect(g);
+            g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + 0.22);
+        } catch (e) {}
     }
 
     function playPlaceBomb() {
-        ensureAudio();
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type = 'triangle';
-        o.frequency.setValueAtTime(440, audioCtx.currentTime);
-        const vol = getVolume();
-        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.09 * Math.max(0.0001, vol), audioCtx.currentTime + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
-        o.connect(g);
-        ensureMasterGain();
-        g.connect(audioMasterGain);
-        o.start(); o.stop(audioCtx.currentTime + 0.22);
-    }
-
-    function playExplosion() {
-        ensureAudio();
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type = 'sawtooth';
-        o.frequency.setValueAtTime(120, audioCtx.currentTime);
-        const vol = getVolume();
-        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.3 * Math.max(0.0001, vol), audioCtx.currentTime + 0.01);
-        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.6);
-        o.connect(g);
-        ensureMasterGain();
-        g.connect(audioMasterGain);
-        o.start(); o.stop(audioCtx.currentTime + 0.6);
-    }
-
-    function playDeath() {
-        ensureAudio();
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type = 'square';
-        o.frequency.setValueAtTime(200, audioCtx.currentTime);
-        const vol = getVolume();
-        g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.2 * Math.max(0.0001, vol), audioCtx.currentTime + 0.01);
-        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.7);
-        o.connect(g);
-        ensureMasterGain();
-        g.connect(audioMasterGain);
-        o.start(); o.stop(audioCtx.currentTime + 0.7);
-    }
-
-    function setVolume(v) {
-        const vol = Number(v);
-        if (!isFinite(vol)) return;
-        window.GameVolume = Math.max(0, vol);
-        if (audioMasterGain && audioCtx) {
-            try { audioMasterGain.gain.setValueAtTime(Math.max(0, vol), audioCtx.currentTime); } catch (e) { }
-        }
+        // no dedicated place-sound file provided; use oscillator fallback
+        playPlaceBombOsc();
     }
 
     return {
         playPlaceBomb,
-        playExplosion,
-        playDeath,
-        setVolume
+        playExplosion: playBomb,
+        playDeath: playDamage,
+        setVolume,
+        playMusic,
+        stopMusic
     };
 })();
 
