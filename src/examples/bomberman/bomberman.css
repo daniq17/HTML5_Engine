@@ -174,7 +174,7 @@ body { margin:0; background: radial-gradient(ellipse at center, #2a2a2a 0%, #111
     background: linear-gradient(160deg, #ffaa20 0%, #e97d00 45%, #b84e00 100%);
     padding: 32px;
     border-radius: 14px;
-    width: 420px;
+    width: 600px;
     text-align: center;
     box-shadow:
         0 0 0 3px rgba(255,180,60,0.35),
@@ -200,3 +200,58 @@ body { margin:0; background: radial-gradient(ellipse at center, #2a2a2a 0%, #111
 #gameOverOverlay button {
     padding: 10px 20px;
 }
+
+/* Canvas used by the game - moved from inline styles in bomberman.html */
+#myCanvas {
+    background: #fff;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+/* Menu animation canvas overlay */
+#menuAnimCanvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    image-rendering: pixelated;
+    background: transparent;
+}
+
+/* Titles and content initial animation state (JS toggles opacity/transform) */
+#menuTitles { position: relative; z-index: 2; }
+#menuTitle { margin: 0; font-size: 40px; opacity: 0; transition: opacity 800ms ease-in; }
+#menuSubtitle { margin: 6px 0 12px; font-size: 16px; color: #000000; opacity: 0; transition: opacity 800ms ease-in 400ms; }
+#menuContent {
+    position: relative;
+    z-index: 2;
+    transform: translateY(40px);
+    opacity: 0;
+    transition: transform 900ms cubic-bezier(.23,1,.32,1), opacity 700ms ease-in;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Small layout helpers inside menuContent */
+#menuContent > .thumb-row { display: flex; gap: 12px; justify-content: center; margin-bottom: 12px; }
+#menuContent .thumb-wrap { text-align: center; }
+#menuContent .thumb-wrap div { font-size: 12px; margin-bottom: 6px; }
+
+/* Thumb sizes and appearance (moved from inline HTML) */
+#p1Thumb, #p2Thumb {
+    width: 52px;
+    height: 52px;
+    cursor: pointer;
+    border-radius: 6px;
+    border: 2px solid #5f2300;
+}
+
+/* Explicit panels (use same base sizes used by the animation code) */
+#mainMenuPanel { width: 600px; height: 600px; box-sizing: border-box; background: #e97d00; border-radius: 8px; text-align: center; box-shadow: 0 6px 18px rgba(65,31,0,0.678); display: flex; flex-direction: column; align-items: center; justify-content: center; transform-origin: center; position: relative; overflow: visible; }
+
+#gameOverPanel { width: 600px; height: 600px; box-sizing: border-box; background: #e97d00; border-radius: 8px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; align-items: center; justify-content: center; transform-origin: center; }

@@ -30,35 +30,35 @@
             <div id="gamePlayers"></div>
         </div>
 
-        <canvas id="myCanvas" width="600" height="520" style="background: #fff; display:block; margin:0; padding:0; border: none;" tabindex="0"></canvas>
+        <canvas id="myCanvas" width="600" height="520" tabindex="0"></canvas>
     </div>
 
     <!-- Main Menu -->
-    <div id="mainMenu" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);">
-        <div id="mainMenuPanel" style="width:600px; height:600px; box-sizing:border-box; background:#e97d00; border-radius:8px; text-align:center; box-shadow:0 6px 18px rgba(65,31,0,0.678); display:flex; flex-direction:column; align-items:center; justify-content:center; transform-origin:center; position:relative; overflow:visible;">
+    <div id="mainMenu" style="position:absolute; inset:0; display:flex;">
+        <div id="mainMenuPanel">
             <!-- animation canvas overlays the panel and runs the intro sequence -->
-            <canvas id="menuAnimCanvas" width="600" height="600" style="position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; image-rendering: pixelated; background: transparent; -moz-image-rendering: pixelated; -webkit-image-rendering: pixelated;"></canvas>
+            <canvas id="menuAnimCanvas" width="600" height="600"></canvas>
 
             <!-- Title & subtitle: hidden initially, revealed after the intro animation -->
-            <div id="menuTitles" style="position:relative; z-index:2;">
-                <h1 id="menuTitle" style="margin:0; font-size:40px; opacity:0; transition:opacity 800ms ease-in;">BomberKids</h1>
-                <p id="menuSubtitle" style="margin:6px 0 12px; font-size:16px; color:#000000; opacity:0; transition:opacity 800ms ease-in 400ms;">Who Gave Them Bombs?</p>
+            <div id="menuTitles">
+                <h1 id="menuTitle">BomberKids</h1>
+                <p id="menuSubtitle">Who Gave Them Bombs?</p>
             </div>
 
             <!-- Main content hidden initially; slides up when shown -->
-            <div id="menuContent" style="position:relative; z-index:2; transform:translateY(40px); opacity:0; transition:transform 900ms cubic-bezier(.23,1,.32,1), opacity 700ms ease-in; display:flex; flex-direction:column; align-items:center;">
-                <div style="display:flex; gap:12px; justify-content:center; margin-bottom:12px;">
-                    <div style="text-align:center;">
-                        <div style="font-size:12px; margin-bottom:6px;">Player 1</div>
-                        <img id="p1Thumb" src="" alt="P1" style="width:52px; height:52px; cursor:pointer; border-radius:6px; border:2px solid #5f2300;" title="Click to cycle colors" />
+            <div id="menuContent">
+                <div class="thumb-row">
+                    <div class="thumb-wrap">
+                        <div>Player 1</div>
+                        <img id="p1Thumb" src="" alt="P1" title="Click to cycle colors" />
                     </div>
-                    <div style="text-align:center;">
-                        <div style="font-size:12px; margin-bottom:6px;">Player 2</div>
-                        <img id="p2Thumb" src="" alt="P2" style="width:52px; height:52px; cursor:pointer; border-radius:6px; border:2px solid #5f2300;" title="Click to cycle colors" />
+                    <div class="thumb-wrap">
+                        <div>Player 2</div>
+                        <img id="p2Thumb" src="" alt="P2" title="Click to cycle colors" />
                     </div>
                 </div>
                 <div style="margin-bottom:12px;">
-                    <button id="menuPlayBtn" style="padding:10px 24px; font-size:18px;">Play</button>
+                    <button id="menuPlayBtn">Play</button>
                 </div>
                 <div style="font-size:12px; color:#000000;">Choose each player's color before starting.</div>
             </div>
@@ -66,26 +66,26 @@
     </div>
 
     <!-- Pause Overlay -->
-    <div id="pauseOverlay" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.5);">
-        <div style="background:#e97d00; padding:24px; border-radius:8px; width:360px; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
-            <h2 style="margin:0 0 10px;">Paused</h2>
-            <label style="display:block; margin-bottom:8px; text-align:left;">Volume</label>
-            <input id="volumeSlider" type="range" min="0" max="100" value="100" style="width:100%; margin-bottom:12px;" />
+    <div id="pauseOverlay" style="position:absolute; inset:0; display:none;">
+        <div>
+            <h2>Paused</h2>
+            <label>Volume</label>
+            <input id="volumeSlider" type="range" min="0" max="100" value="100" />
             <div style="display:flex; gap:8px; justify-content:center;">
-                <button id="resumeBtn" style="padding:8px 16px;">Resume</button>
-                <button id="menuBtn" style="padding:8px 16px;">Menu</button>
+                <button id="resumeBtn">Resume</button>
+                <button id="menuBtn">Menu</button>
             </div>
         </div>
     </div>
 
     <!-- Game Over Overlay -->
-    <div id="gameOverOverlay" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); z-index: 1001;">
-        <div id="gameOverPanel" style="width:600px; height:600px; box-sizing:border-box; background:#e97d00; border-radius:8px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.5); display:flex; flex-direction:column; align-items:center; justify-content:center; transform-origin:center;">
-            <h2 id="gameOverTitle" style="margin:0 0 10px; font-size:28px;">Game Over</h2>
-            <p id="gameOverMessage" style="margin:6px 0 18px; font-size:18px; color:#333;">Player 1 Wins</p>
+    <div id="gameOverOverlay" style="position:absolute; inset:0; display:none; z-index: 1001;">
+        <div id="gameOverPanel">
+            <h2 id="gameOverTitle">Game Over</h2>
+            <p id="gameOverMessage">Player 1 Wins</p>
             <div style="display:flex; gap:12px; justify-content:center;">
-                <button id="gameOverMenuBtn" style="padding:8px 16px;">Menu</button>
-                <button id="gameOverRestartBtn" style="padding:8px 16px;">Restart</button>
+                <button id="gameOverMenuBtn">Menu</button>
+                <button id="gameOverRestartBtn">Restart</button>
             </div>
         </div>
     </div>
