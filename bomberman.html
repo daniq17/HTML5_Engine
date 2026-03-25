@@ -91,42 +91,9 @@
     </div>
 
     <script>
-        // Small SVG sprites in data-URI form (keeps repository light).
-        const playerSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
-            <svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
-                <rect x='6' y='8' width='28' height='24' rx='4' ry='4' fill='%23007acc' />
-                <circle cx='18' cy='18' r='3' fill='%23fff' />
-            </svg>`);
-
-        const bombSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
-            <svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'>
-                <circle cx='14' cy='14' r='10' fill='%23000' />
-                <rect x='18' y='2' width='4' height='8' fill='%23b33' rx='1' ry='1' />
-            </svg>`);
-
-        const brickSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
-            <svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
-                <rect x='2' y='6' width='36' height='28' fill='%238b4513' rx='3' ry='3' />
-            </svg>`);
-
-        const wallSVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
-            <svg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'>
-                <rect x='2' y='6' width='36' height='28' fill='%23333' rx='2' ry='2' />
-            </svg>`);
-
-        const enemySVG = `data:image/svg+xml;utf8,` + encodeURIComponent(`
-            <svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
-                <rect x='4' y='6' width='28' height='22' fill='%23c03030' rx='4' ry='4' />
-                <circle cx='12' cy='14' r='2' fill='%23fff' />
-            </svg>`);
-
-        // Create Image objects for game to use if desired
-        const playerImage = new Image(); playerImage.src = playerSVG;
-        const bombImage = new Image(); bombImage.src = bombSVG;
+        // Create Image objects for game to use
         const brickImage = new Image(); brickImage.src = 'src/examples/bomberman/assets/Bricks.png';
-        // Prefer the Wall.png asset for indestructible walls (fallback SVG still available in wallSVG)
         const wallImage = new Image(); wallImage.src = 'src/examples/bomberman/assets/Wall.png';
-        const enemyImage = new Image(); enemyImage.src = enemySVG;
         
         // Powerup images (16x16) used by the example game
         const bombPowerupImg = new Image(); bombPowerupImg.src = 'src/examples/bomberman/assets/bombPowerup.png';
@@ -205,7 +172,7 @@
             playerSpritePreview,
             playerSpriteP1: playerSheets.blue,
             playerSpriteP2: playerSheets.purple,
-            playerImage, bombImage, brickImage, wallImage, enemyImage, bombSprites,
+            brickImage, wallImage, bombSprites,
             // expose powerup images
             bombPowerup: bombPowerupImg,
             shieldPowerup: shieldPowerupImg,
@@ -274,12 +241,6 @@
             }
         }
 
-        // Hook into existing start handlers to apply selection before Init
-        const originalMenuPlay = window.menuPlayBtnClick;
-
-
-
-
         // Start the page
         window.onload = () => {
             // setup thumbnail selectors for players
@@ -312,17 +273,6 @@
                     setThumb(p2Thumb, playerSheets[col]);
                 });
             }
-            // Optional legacy Start button (keeps old behaviour as restart) - guard in case element missing
-            const startBtn = document.getElementById('startBtn');
-            if (startBtn) {
-                startBtn.addEventListener('click', () => {
-                    ApplyPlayerSelections();
-                    Init(BombermanGame);
-                    document.getElementById('mainMenu').style.display = 'none';
-                    window.GamePaused = false;
-                });
-            }
-
             // Main menu Play button
             document.getElementById('menuPlayBtn').addEventListener('click', () => { ApplyPlayerSelections(); startGameFromMenu(); });
 
