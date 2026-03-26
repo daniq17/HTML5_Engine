@@ -9,7 +9,13 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="src/examples/bomberman/bomberman.css">
 
-    <!-- Engine core -->
+        <!-- ===== Engine core scripts =====
+            These load the minimal engine runtime required by the example:
+            - renderer: canvas drawing helpers
+            - main: engine bootstrap / game loop
+            - utils_math/input/audioplayer: shared utilities used by games
+            - game / utils_classes / gameobjects: core engine abstractions
+        -->
     <script src="src/engine/renderer.js"></script>
     <script src="src/engine/main.js"></script>
     <script src="src/engine/utils_math.js"></script>
@@ -19,21 +25,46 @@
     <script src="src/engine/utils_classes.js"></script>
     <script src="src/engine/gameobjects.js"></script>
 
-    <!-- Example game -->
+        <!-- ===== Example game (Bomberman) =====
+            Loads the example implementation which also exposes page helpers
+            (window.BombermanAssets, window.BombermanPage, and BombermanGame).
+        -->
     <script src="src/examples/bomberman/bomberman.js"></script>
 
 </head>
 <body>
-    <div id="gameContainer">
+        <!-- ===== Game container =====
+            Contains the header HUD and the main canvas where the game renders.
+        -->
+        <div id="gameContainer">
         <div id="gameHeader">
-            <div id="gameState"></div>
-            <div id="gamePlayers"></div>
+            <div id="gameState" style="display:flex; gap:12px; align-items:center;">
+                <div id="player1Hud" style="display:flex; align-items:center; gap:6px;">
+                    <img id="p1_ui_img" src="" style="width:40px;height:40px;object-fit:contain;border-radius:6px;" alt="P1"/>
+                    <div id="p1_lives" style="font-size:24px; font-weight:600; background:#000; border:3px solid rgb(233,62,0); padding:6px; color:#fff; border-radius:4px; min-width:20px; text-align:center;">3</div>
+                    <img id="p1_bomb_img" src="" style="width:40px;height:40px;object-fit:contain;" alt="Bomb"/>
+                    <div id="p1_bomb_count" style="font-size:24px; background:#000; border:3px solid rgb(233,62,0); padding:6px; color:#fff; border-radius:4px; min-width:20px; text-align:center;">1</div>
+                    <img id="p1_shield_img" src="" style="width:40px;height:40px;object-fit:contain;" alt="Shield"/>
+                </div>
+            </div>
+            <div id="gamePlayers" style="display:flex; gap:12px; align-items:center; justify-content:flex-end;">
+                <div id="player2Hud" style="display:flex; align-items:center; gap:6px;">
+                    <img id="p2_ui_img" src="" style="width:40px;height:40px;object-fit:contain;border-radius:6px;" alt="P2"/>
+                    <div id="p2_lives" style="font-size:24px; font-weight:600; background:#000; border:3px solid rgb(233,62,0); padding:6px; color:#fff; border-radius:4px; min-width:20px; text-align:center;">3</div>
+                    <img id="p2_bomb_img" src="" style="width:40px;height:40px;object-fit:contain;" alt="Bomb"/>
+                    <div id="p2_bomb_count" style="font-size:24px; background:#000; border:3px solid rgb(233,62,0); padding:6px; color:#fff; border-radius:4px; min-width:20px; text-align:center;">1</div>
+                    <img id="p2_shield_img" src="" style="width:40px;height:40px;object-fit:contain;" alt="Shield"/>
+                </div>
+            </div>
         </div>
 
         <canvas id="myCanvas" width="600" height="520" tabindex="0"></canvas>
     </div>
 
-    <!-- Main Menu -->
+        <!-- ===== Main Menu Overlay =====
+            Visible on load. The content is rendered by static DOM; the
+            interaction wiring lives in bomberman.js (BombermanPage.Init).
+        -->
     <div id="mainMenu" style="position:absolute; inset:0; display:flex;">
         <div id="mainMenuPanel">
             <!-- animation canvas overlays the panel and runs the intro sequence -->
@@ -65,7 +96,10 @@
         </div>
     </div>
 
-    <!-- Pause Overlay -->
+        <!-- ===== Pause Overlay =====
+            Shown when the game is paused. Volume slider is wired by
+            BombermanPage.Init in bomberman.js so the slider affects audio.
+        -->
     <div id="pauseOverlay" style="position:absolute; inset:0; display:none;">
         <div>
             <h2>Paused</h2>
@@ -78,7 +112,10 @@
         </div>
     </div>
 
-    <!-- Game Over Overlay -->
+        <!-- ===== Game Over Overlay =====
+            Shown at the end of a match. Controls (Menu / Restart) are
+            wired in bomberman.js so game lifecycle is handled centrally.
+        -->
     <div id="gameOverOverlay" style="position:absolute; inset:0; display:none; z-index: 1001;">
         <div id="gameOverPanel">
             <h2 id="gameOverTitle">Game Over</h2>
@@ -90,302 +127,27 @@
         </div>
     </div>
 
+
+
+    
     <script>
-        // Create Image objects for game to use
-        const brickImage = new Image(); brickImage.src = 'src/examples/bomberman/assets/Bricks.png';
-        const wallImage = new Image(); wallImage.src = 'src/examples/bomberman/assets/Wall.png';
-        
-        // Powerup images (16x16) used by the example game
-        const bombPowerupImg = new Image(); bombPowerupImg.src = 'src/examples/bomberman/assets/bombPowerup.png';
-        const shieldPowerupImg = new Image(); shieldPowerupImg.src = 'src/examples/bomberman/assets/shieldPowerup.png';
-        // Explosion images (16x16)
-        const centerFireImg = new Image(); centerFireImg.src = 'src/examples/bomberman/assets/CenterFire.png';
-        const middleFireImg = new Image(); middleFireImg.src = 'src/examples/bomberman/assets/MiddleFire.png';
-        const endFireImg = new Image(); endFireImg.src = 'src/examples/bomberman/assets/EndFire.png';
-        // Load player sprite sheets (multiple color choices)
-        const playerColors = ['blue','brown','green','pink','purple','yellow'];
-        const playerSheets = {};
-        playerColors.forEach(col => {
-            const img = new Image();
-            img.src = `src/examples/bomberman/assets/${col}Player.png`;
-            playerSheets[col] = img;
-        });
-
-        // UI icons for header (16x16) - map player color -> UI image
-        const uiImages = {
-            blue: (() => { const i=new Image(); i.src='src/examples/bomberman/assets/UIWhite.png'; return i; })(),
-            brown: (() => { const i=new Image(); i.src='src/examples/bomberman/assets/UIBrown.png'; return i; })(),
-            green: (() => { const i=new Image(); i.src='src/examples/bomberman/assets/UIGreen.png'; return i; })(),
-            pink: (() => { const i=new Image(); i.src='src/examples/bomberman/assets/UIPink.png'; return i; })(),
-            purple: (() => { const i=new Image(); i.src='src/examples/bomberman/assets/UIPurple.png'; return i; })(),
-            yellow: (() => { const i=new Image(); i.src='src/examples/bomberman/assets/UIYellow.png'; return i; })(),
-        };
-        const uiBombImg = new Image(); uiBombImg.src = 'src/examples/bomberman/assets/UIBomb.png';
-        const uiShieldActiveImg = new Image(); uiShieldActiveImg.src = 'src/examples/bomberman/assets/UIShieldActive.png';
-        const uiShieldInactiveImg = new Image(); uiShieldInactiveImg.src = 'src/examples/bomberman/assets/UIShieldInactive.png';
-
-        // Helper: create a thumbnail from the first 64x64 frame of a spritesheet
-        function createThumbFromSheet(img, size=48) {
-            if (!img) return '';
-            const canvas = document.createElement('canvas');
-            canvas.width = size; canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            try {
-                // disable smoothing when scaling down to keep pixels crisp
-                if (typeof ctx.imageSmoothingEnabled !== 'undefined') ctx.imageSmoothingEnabled = false;
-                if (typeof ctx.mozImageSmoothingEnabled !== 'undefined') ctx.mozImageSmoothingEnabled = false;
-                if (typeof ctx.webkitImageSmoothingEnabled !== 'undefined') ctx.webkitImageSmoothingEnabled = false;
-                try { ctx.imageSmoothingQuality = 'low'; } catch (e) {}
-                // draw only the first 64x64 section (top-left)
-                ctx.drawImage(img, 0, 0, 64, 64, 0, 0, size, size);
-                return canvas.toDataURL();
-            } catch (e) {
-                return '';
-            }
-        }
-
-        function setThumb(imgElement, sheetImg) {
-            if (!imgElement) return;
-            if (sheetImg && sheetImg.complete) {
-                const data = createThumbFromSheet(sheetImg, Math.max(32, Math.min(64, imgElement.width || 48)));
-                if (data) imgElement.src = data;
-            } else if (sheetImg) {
-                sheetImg.onload = () => {
-                    const data = createThumbFromSheet(sheetImg, Math.max(32, Math.min(64, imgElement.width || 48)));
-                    if (data) imgElement.src = data;
-                };
-            }
-        }
-
-        // Create previews mapping (optional)
-        const playerSpritePreview = {
-            p1: playerSheets.blue,
-            p2: playerSheets.purple
-        };
-
-        // bomb sprite sheet (4 frames 16x16)
-        const bombSprites = new Image(); bombSprites.src = "src/examples/bomberman/assets/bombSprites2.png";
-
-        // Expose assets globally so src/examples/bomberman/bomberman.js can use them if it checks window.BombermanAssets
-        window.BombermanAssets = {
-            playerSheets, // map of color -> Image
-            playerSpritePreview,
-            playerSpriteP1: playerSheets.blue,
-            playerSpriteP2: playerSheets.purple,
-            brickImage, wallImage, bombSprites,
-            // expose powerup images
-            bombPowerup: bombPowerupImg,
-            shieldPowerup: shieldPowerupImg,
-            // explosion images
-            centerFire: centerFireImg,
-            middleFire: middleFireImg,
-            endFire: endFireImg
-        };
-
-        // expose UI icons as well
-        window.BombermanAssets.uiImages = uiImages;
-        window.BombermanAssets.uiBomb = uiBombImg;
-        window.BombermanAssets.uiShieldActive = uiShieldActiveImg;
-        window.BombermanAssets.uiShieldInactive = uiShieldInactiveImg;
-
-        // attach audio helper functions exposed by bomberman.js
-        const audioApi = window.BombermanAudio || {};
-        window.BombermanAssets.playPlaceBomb = audioApi.playPlaceBomb;
-        window.BombermanAssets.playExplosion = audioApi.playExplosion;
-        window.BombermanAssets.playDeath = audioApi.playDeath;
-
-        function showMainMenu() {
-            document.getElementById('mainMenu').style.display = 'flex';
-            document.getElementById('pauseOverlay').style.display = 'none';
-            // pause the game loop
-            window.GamePaused = true;
-            // start the animated intro for the main menu
-            try { startMainMenuIntro(); } catch (e) { /* ignore if function missing */ }
-        }
-
-        function hideMainMenu() {
-            document.getElementById('mainMenu').style.display = 'none';
-            // allow the game to run
-            window.GamePaused = false;
-        }
-
-        function startGameFromMenu() {
-            hideMainMenu();
-            // initialize the example game
-            Init(BombermanGame);
-        }
-
-        function togglePause() {
-            const overlay = document.getElementById('pauseOverlay');
-            if (overlay.style.display === 'flex') {
-                overlay.style.display = 'none';
-                window.GamePaused = false;
-            } else {
-                overlay.style.display = 'flex';
-                window.GamePaused = true;
-            }
-        }
+        // Bridge functions: delegate page-level calls to the JS module
+        // (BombermanPage lives in src/examples/bomberman/bomberman.js).
+        // Keeping these small wrappers preserves the original API used by
+        // other inline code while moving implementation into the JS file.
+        function showMainMenu() { try { if (window.BombermanPage && typeof window.BombermanPage.showMainMenu === 'function') window.BombermanPage.showMainMenu(); } catch(e){} }
+        function hideMainMenu() { try { if (window.BombermanPage && typeof window.BombermanPage.hideMainMenu === 'function') window.BombermanPage.hideMainMenu(); } catch(e){} }
+        function startGameFromMenu() { try { if (window.BombermanPage && typeof window.BombermanPage.startGameFromMenu === 'function') window.BombermanPage.startGameFromMenu(); } catch(e){} }
+        function togglePause() { try { if (window.BombermanPage && typeof window.BombermanPage.togglePause === 'function') window.BombermanPage.togglePause(); } catch(e){} }
+        function ShowGameOver(winner) { try { if (window.BombermanPage && typeof window.BombermanPage.showGameOver === 'function') window.BombermanPage.showGameOver(winner); } catch(e){} }
+        function HideGameOver() { try { if (window.BombermanPage && typeof window.BombermanPage.hideGameOver === 'function') window.BombermanPage.hideGameOver(); } catch(e){} }
 
         // when starting the game apply selected player sheets
-        function ApplyPlayerSelections() {
-            const p1Thumb = document.getElementById('p1Thumb');
-            const p2Thumb = document.getElementById('p2Thumb');
-            const p1 = (p1Thumb && p1Thumb.dataset && p1Thumb.dataset.color) ? p1Thumb.dataset.color : 'blue';
-            const p2 = (p2Thumb && p2Thumb.dataset && p2Thumb.dataset.color) ? p2Thumb.dataset.color : 'purple';
-            if (window.BombermanAssets && window.BombermanAssets.playerSheets) {
-                window.BombermanAssets.playerSpriteP1 = window.BombermanAssets.playerSheets[p1] || window.BombermanAssets.playerSpriteP1;
-                window.BombermanAssets.playerSpriteP2 = window.BombermanAssets.playerSheets[p2] || window.BombermanAssets.playerSpriteP2;
-                // remember selected colors for HUD UI icons
-                window.BombermanAssets.playerColorP1 = p1;
-                window.BombermanAssets.playerColorP2 = p2;
-            }
-        }
+        function ApplyPlayerSelections() { try { if (window.BombermanPage && typeof window.BombermanPage.ApplyPlayerSelections === 'function') window.BombermanPage.ApplyPlayerSelections(); } catch(e){} }
 
-        // Start the page
-        window.onload = () => {
-            // setup thumbnail selectors for players
-            const p1Thumb = document.getElementById('p1Thumb');
-            const p2Thumb = document.getElementById('p2Thumb');
-            if (p1Thumb) {
-                // default to blue
-                p1Thumb.dataset.colorIndex = 0;
-                p1Thumb.dataset.color = playerColors[0];
-                setThumb(p1Thumb, playerSheets[playerColors[0]]);
-                p1Thumb.addEventListener('click', () => {
-                    let idx = (parseInt(p1Thumb.dataset.colorIndex || 0, 10) + 1) % playerColors.length;
-                    p1Thumb.dataset.colorIndex = idx;
-                    const col = playerColors[idx];
-                    p1Thumb.dataset.color = col;
-                    setThumb(p1Thumb, playerSheets[col]);
-                });
-            }
-            if (p2Thumb) {
-                // default to purple
-                const defaultIdx = playerColors.indexOf('purple') >= 0 ? playerColors.indexOf('purple') : 4;
-                p2Thumb.dataset.colorIndex = defaultIdx;
-                p2Thumb.dataset.color = playerColors[defaultIdx];
-                setThumb(p2Thumb, playerSheets[playerColors[defaultIdx]]);
-                p2Thumb.addEventListener('click', () => {
-                    let idx = (parseInt(p2Thumb.dataset.colorIndex || 0, 10) + 1) % playerColors.length;
-                    p2Thumb.dataset.colorIndex = idx;
-                    const col = playerColors[idx];
-                    p2Thumb.dataset.color = col;
-                    setThumb(p2Thumb, playerSheets[col]);
-                });
-            }
-            // Main menu Play button
-            document.getElementById('menuPlayBtn').addEventListener('click', () => { ApplyPlayerSelections(); startGameFromMenu(); });
-
-            // Pause overlay buttons
-            document.getElementById('resumeBtn').addEventListener('click', () => togglePause());
-            document.getElementById('menuBtn').addEventListener('click', () => {
-                // show main menu and stop current game
-                showMainMenu();
-            });
-
-            // Volume slider
-            const vol = document.getElementById('volumeSlider');
-            function updateVolumeSliderAppearance(slider) {
-                if (!slider) return;
-                const red = 'rgb(233,62,0)';
-                const val = Number(slider.value || 0);
-                const pct = Math.max(0, Math.min(100, val));
-                const grad = `linear-gradient(to right, ${red} 0%, ${red} ${pct}%, #ddd ${pct}%, #ddd 100%)`;
-                // apply to inline background (works in WebKit/Blink) and set CSS var for pseudo-elements
-                slider.style.background = grad;
-                slider.style.setProperty('--range-bg', grad);
-                // Firefox uses ::-moz-range-progress; set that via a CSS var fallback handled above
-            }
-            if (vol) {
-                // initialize appearance and set volume
-                updateVolumeSliderAppearance(vol);
-                window.GameVolume = Number(vol.value) / 100.0;
-                if (window.BombermanAudio && typeof window.BombermanAudio.setVolume === 'function') {
-                    window.BombermanAudio.setVolume(window.GameVolume);
-                }
-                vol.addEventListener('input', (e) => {
-                    const v = Number(e.target.value);
-                    window.GameVolume = isFinite(v) ? v / 100.0 : 1.0;
-                    if (window.BombermanAudio && typeof window.BombermanAudio.setVolume === 'function') {
-                        window.BombermanAudio.setVolume(window.GameVolume);
-                    }
-                    updateVolumeSliderAppearance(vol);
-                });
-            }
-
-            // Clicking canvas focuses input
-            const c = document.getElementById('myCanvas');
-            c.addEventListener('mousedown', () => c.focus());
-
-            // Show main menu on load
-            showMainMenu();
-
-            // Toggle pause with Escape key
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape' || e.keyCode === 27) {
-                    // only toggle if a game is initialized
-                    if (typeof Init === 'function') {
-                        togglePause();
-                    }
-                }
-            });
-                // ensure overlays are positioned over the game area (header + canvas)
-                function positionOverlays() {
-                    const container = document.getElementById('gameContainer');
-                    if (!container) return;
-                    const rect = container.getBoundingClientRect();
-                    ['mainMenu','pauseOverlay','gameOverOverlay'].forEach(id => {
-                        const el = document.getElementById(id);
-                        if (!el) return;
-                        el.style.position = 'absolute';
-                        el.style.left = rect.left + 'px';
-                        el.style.top = rect.top + 'px';
-                        el.style.width = rect.width + 'px';
-                        el.style.height = rect.height + 'px';
-                        el.style.margin = '0';
-                    });
-                    // scale the main menu and game-over panels so they occupy the full header+canvas area
-                    ['mainMenuPanel','gameOverPanel'].forEach(pid => {
-                        const panel = document.getElementById(pid);
-                        if (!panel) return;
-                        const baseW = 600, baseH = 600; // header(80)+canvas(520) = 600
-                        const scale = Math.min(rect.width / baseW, rect.height / baseH);
-                        panel.style.transform = `scale(${scale})`;
-                        // center the scaled panel inside the overlay
-                        panel.style.margin = '0 auto';
-                    });
-                }
-                // initial placement and update on resize/scroll
-                positionOverlays();
-                window.addEventListener('resize', positionOverlays);
-                window.addEventListener('scroll', positionOverlays);
-        };
-
-
-
-
-
-        // Show game over overlay with winner id (1 or 2)
-        function ShowGameOver(winner) {
-            const overlay = document.getElementById('gameOverOverlay');
-            const msg = document.getElementById('gameOverMessage');
-            const title = document.getElementById('gameOverTitle');
-            title.textContent = 'Game Over';
-            msg.textContent = winner === 1 ? 'Player 1 Wins' : 'Player 2 Wins';
-            overlay.style.display = 'flex';
-            // pause game loop
-            window.GamePaused = true;
-        }
-
-        function HideGameOver() {
-            const overlay = document.getElementById('gameOverOverlay');
-            overlay.style.display = 'none';
-            window.GamePaused = false;
-        }
-
-
-
-
+        // Initialize page UI once the window is ready. This calls into
+        // the BombermanPage module which sets up event handlers and layout.
+        window.onload = () => { try { if (window.BombermanPage && typeof window.BombermanPage.Init === 'function') window.BombermanPage.Init(); } catch(e){} };
 
 
         // --- Main Menu Intro Animation -------------------------------------------------
@@ -544,24 +306,7 @@
             window.startMainMenuIntro = startMainMenuIntro;
         })();
 
-        // Hook overlay buttons
-        document.addEventListener('DOMContentLoaded', () => {
-            const menuBtn = document.getElementById('gameOverMenuBtn');
-            const restartBtn = document.getElementById('gameOverRestartBtn');
-            if (menuBtn) menuBtn.addEventListener('click', () => {
-                HideGameOver();
-                // show main menu overlay
-                showMainMenu();
-            });
-            if (restartBtn) restartBtn.addEventListener('click', () => {
-                HideGameOver();
-                // restart the game
-                ApplyPlayerSelections();
-                Init(BombermanGame);
-                document.getElementById('mainMenu').style.display = 'none';
-                window.GamePaused = false;
-            });
-        });
+        // Overlay button hooks moved to BombermanPage.Init()
     </script>
 </body>
 </html>
