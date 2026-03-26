@@ -26,8 +26,40 @@
 <body>
     <div id="gameContainer">
         <div id="gameHeader">
-            <div id="gameState"></div>
-            <div id="gamePlayers"></div>
+            <div id="gameState">
+                <div class="bm-player">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <img class="bm-ui-img" src="" alt="P1 UI" style="width:40px;height:40px;object-fit:contain;border-radius:6px;" />
+                            <div class="bm-lives" style="font-size:24px;font-weight:600;background:#000;border:3px solid rgb(233,62,0);padding:6px;color:#fff;border-radius:4px;min-width:20px;text-align:center;">3</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <img class="bm-bomb-img" src="" alt="Bomb" style="width:40px;height:40px;object-fit:contain;" />
+                            <div class="bm-bomb-count" style="font-size:24px;background:#000;border:3px solid rgb(233,62,0);padding:6px;color:#fff;border-radius:4px;min-width:20px;text-align:center;">1</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <img class="bm-shield-img" src="" alt="Shield" style="width:40px;height:40px;object-fit:contain;" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="gamePlayers">
+                <div class="bm-player">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <img class="bm-ui-img" src="" alt="P2 UI" style="width:40px;height:40px;object-fit:contain;border-radius:6px;" />
+                            <div class="bm-lives" style="font-size:24px;font-weight:600;background:#000;border:3px solid rgb(233,62,0);padding:6px;color:#fff;border-radius:4px;min-width:20px;text-align:center;">3</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <img class="bm-bomb-img" src="" alt="Bomb" style="width:40px;height:40px;object-fit:contain;" />
+                            <div class="bm-bomb-count" style="font-size:24px;background:#000;border:3px solid rgb(233,62,0);padding:6px;color:#fff;border-radius:4px;min-width:20px;text-align:center;">1</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <img class="bm-shield-img" src="" alt="Shield" style="width:40px;height:40px;object-fit:contain;" />
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <canvas id="myCanvas" width="600" height="520" tabindex="0"></canvas>

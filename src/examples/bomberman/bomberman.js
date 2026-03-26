@@ -1,129 +1,18 @@
 // WebAudio helpers for Bomberman SFX. Kept in JS so HTML only wires UI.
-window.BombermanAudio = (function createBombermanAudio() {
-    const basePath = 'src/examples/bomberman/assets/audio/';
-    const files = {
-        mainMenu: 'MainMenu.mp3',
-        game: 'GameMusic.mp3',
-        victory: 'VictoryTheme.mp3',
-        bomb: 'BombSoundEffect.mp3',
-        damage: 'DamageSoundEffect.mp3'
-    };
 
-    // Create HTMLAudioElements for music (looped) and sfx
-    const music = {
-        mainMenu: new Audio(basePath + files.mainMenu),
-        game: new Audio(basePath + files.game),
-        victory: new Audio(basePath + files.victory)
-    };
-    Object.values(music).forEach(a => { a.loop = true; a.preload = 'auto'; a.volume = (typeof window.GameVolume !== 'undefined') ? Number(window.GameVolume) : 1.0; });
-
-    const sfx = {
-        bomb: new Audio(basePath + files.bomb),
-        damage: new Audio(basePath + files.damage)
-    };
-    Object.values(sfx).forEach(a => { a.loop = false; a.preload = 'auto'; a.volume = (typeof window.GameVolume !== 'undefined') ? Number(window.GameVolume) : 1.0; });
-
-    let currentSfx = null;
-    let currentMusic = null;
-
-    function setVolume(v) {
-        const vol = Math.max(0, Math.min(1, Number(v)));
-        window.GameVolume = vol;
-        Object.values(music).forEach(a => { try { a.volume = vol; } catch (e) {} });
-        Object.values(sfx).forEach(a => { try { a.volume = vol; } catch (e) {} });
-    }
-
-    function stopCurrentSfx() {
-        if (currentSfx) {
-            try { currentSfx.pause(); currentSfx.currentTime = 0; } catch (e) {}
-            currentSfx = null;
-        }
-    }
-
-    function playSfx(name) {
-        stopCurrentSfx();
-        const a = sfx[name];
-        if (a) {
-            try { a.currentTime = 0; a.volume = window.GameVolume || 1.0; a.play().catch(()=>{}); currentSfx = a; } catch (e) {}
-        }
-    }
-
-    function playBomb() { playSfx('bomb'); }
-    function playDamage() { playSfx('damage'); }
-
-    function stopMusic() {
-        if (currentMusic) {
-            try { currentMusic.pause(); currentMusic.currentTime = 0; } catch (e) {}
-            currentMusic = null;
-        }
-    }
-
-    function playMusic(name) {
-        if (!name) return;
-        try {
-            if (currentMusic && currentMusic !== music[name]) {
-                currentMusic.pause();
-                currentMusic.currentTime = 0;
-            }
-        } catch (e) {}
-        const m = music[name];
-        if (m) {
-            m.volume = window.GameVolume || 1.0;
-            currentMusic = m;
-            m.play().catch(() => {
-                // Autoplay blocked — retry once on the first user gesture
-                const retry = () => { try { m.play().catch(()=>{}); } catch (e) {} };
-                try {
-                    document.addEventListener('pointerdown', retry, { once: true });
-                    document.addEventListener('mousedown', retry, { once: true });
-                    document.addEventListener('touchstart', retry, { once: true });
-                } catch (e) {
-                    // older browsers: fallback to simple handlers
-                    document.addEventListener('mousedown', retry);
-                    document.addEventListener('touchstart', retry);
-                }
-            });
-        }
-    }
-
-    // Keep a small oscillator fallback for the place-bomb sound if no file exists
-    let audioCtx = null;
-    function ensureAudioCtx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-    function playPlaceBombOsc() {
-        ensureAudioCtx();
-        try {
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.type = 'triangle';
-            o.frequency.setValueAtTime(440, audioCtx.currentTime);
-            const vol = (typeof window.GameVolume !== 'undefined') ? Number(window.GameVolume) : 1.0;
-            g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-            g.gain.exponentialRampToValueAtTime(0.09 * Math.max(0.0001, vol), audioCtx.currentTime + 0.02);
-            g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.2);
-            o.connect(g);
-            g.connect(audioCtx.destination);
-            o.start(); o.stop(audioCtx.currentTime + 0.22);
-        } catch (e) {}
-    }
-
-    function playPlaceBomb() {
-        // no dedicated place-sound file provided; use oscillator fallback
-        playPlaceBombOsc();
-    }
-
-    return {
-        playPlaceBomb,
-        playExplosion: playBomb,
-        playDeath: playDamage,
-        setVolume,
-        playMusic,
-        stopMusic
-    };
-})();
 
 class BombermanGame extends Game {
     constructor(renderer) {
         super(renderer);
+
+        // Register audio assets so engine AudioPlayer will load them in Init()
+        this.audioAssets = {
+            mainMenu: { path: 'src/examples/bomberman/assets/audio/MainMenu.mp3' },
+            game: { path: 'src/examples/bomberman/assets/audio/GameMusic.mp3' },
+            victory: { path: 'src/examples/bomberman/assets/audio/VictoryTheme.mp3' },
+            bomb: { path: 'src/examples/bomberman/assets/audio/BombSoundEffect.mp3' },
+            damage: { path: 'src/examples/bomberman/assets/audio/DamageSoundEffect.mp3' }
+        };
 
         // Disable image smoothing for crisp pixel art (scale 16x16 sprites with nearest neighbor)
         this.config.imageSmoothingEnabled = false;
@@ -288,7 +177,7 @@ class BombermanGame extends Game {
                 }
                 this.bombs.push(bObj);
                 this.player1.bombsPlaced++;
-                if (window.BombermanAssets && window.BombermanAssets.playPlaceBomb) window.BombermanAssets.playPlaceBomb();
+                    try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.PlayFromTheStart('bomb', 0, window.GameVolume || 1.0).catch(()=>{}); } catch (e) {}
             }
         }
         if (Input.GetActionDown("P2_PlaceBomb")) {
@@ -304,7 +193,7 @@ class BombermanGame extends Game {
                 }
                 this.bombs.push(bObj);
                 this.player2.bombsPlaced++;
-                if (window.BombermanAssets && window.BombermanAssets.playPlaceBomb) window.BombermanAssets.playPlaceBomb();
+                try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.PlayFromTheStart('bomb', 0, window.GameVolume || 1.0).catch(()=>{}); } catch (e) {}
             }
         }
 
@@ -515,7 +404,7 @@ class BombermanGame extends Game {
             this.player1.pixelPos = new Vector2(this.offsetX + this.player1.x * this.cellSize + Math.floor(this.cellSize/2), this.offsetY + this.player1.y * this.cellSize + Math.floor(this.cellSize/2));
             this.player1.moveFrom = Vector2.Copy(this.player1.pixelPos);
             this.player1.moveTo = Vector2.Copy(this.player1.pixelPos);
-            if (window.BombermanAssets && window.BombermanAssets.playDeath) window.BombermanAssets.playDeath();
+            try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.PlayFromTheStart('damage', 0, window.GameVolume || 1.0).catch(()=>{}); } catch (e) {}
             if (this.player1.lives <= 0) {
                 // player2 wins
                 this.GameOver(2);
@@ -548,7 +437,7 @@ class BombermanGame extends Game {
             this.player2.pixelPos = new Vector2(this.offsetX + this.player2.x * this.cellSize + Math.floor(this.cellSize/2), this.offsetY + this.player2.y * this.cellSize + Math.floor(this.cellSize/2));
             this.player2.moveFrom = Vector2.Copy(this.player2.pixelPos);
             this.player2.moveTo = Vector2.Copy(this.player2.pixelPos);
-            if (window.BombermanAssets && window.BombermanAssets.playDeath) window.BombermanAssets.playDeath();
+            try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.PlayFromTheStart('damage', 0, window.GameVolume || 1.0).catch(()=>{}); } catch (e) {}
             if (this.player2.lives <= 0) {
                 // player1 wins
                 this.GameOver(1);
@@ -559,7 +448,7 @@ class BombermanGame extends Game {
     GameOver() {
         // if called without winner, just set game over
         this.gameOver = true;
-        if (window.BombermanAssets && window.BombermanAssets.playDeath) window.BombermanAssets.playDeath();
+            try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.PlayFromTheStart('damage', 0, window.GameVolume || 1.0).catch(()=>{}); } catch (e) {}
         // if an overlay function exists in the page, invoke it with the winner id
         if (arguments.length > 0) {
             const winner = arguments[0];
@@ -610,7 +499,7 @@ class BombermanGame extends Game {
         }
         // store center coords so drawing code can determine directions
         this.explosions.push({ tiles: tiles, timer: 0.55, cx: bomb.x, cy: bomb.y });
-        if (window.BombermanAssets && window.BombermanAssets.playExplosion) window.BombermanAssets.playExplosion();
+        try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.PlayFromTheStart('bomb', 0, window.GameVolume || 1.0).catch(()=>{}); } catch (e) {}
     }
 
     Draw() {
@@ -795,44 +684,56 @@ class BombermanGame extends Game {
             this.renderer.DrawStrokeBasicRectangle(p2x + pad/2, p2y + pad/2, this.cellSize - pad, this.cellSize - pad, Color.white, 2);
         }
 
-        // HUD: update HTML header instead of drawing on canvas
+        // HUD: incremental DOM updates instead of rebuilding HTML every frame
         try {
-            const el1 = document.getElementById('gameState');
-            const el2 = document.getElementById('gamePlayers');
+            // lazy init HUD containers and cache element refs on the game instance
+            if (!this.hudElements) {
+                const el1 = document.getElementById('gameState') || null;
+                const el2 = document.getElementById('gamePlayers') || null;
+                if (el1 && el2) {
+                    this.hudElements = {
+                        p1: {
+                            root: el1.querySelector('.bm-player'),
+                            uiImg: el1.querySelector('.bm-ui-img'),
+                            lives: el1.querySelector('.bm-lives'),
+                            bombImg: el1.querySelector('.bm-bomb-img'),
+                            bombCount: el1.querySelector('.bm-bomb-count'),
+                            shieldImg: el1.querySelector('.bm-shield-img')
+                        },
+                        p2: {
+                            root: el2.querySelector('.bm-player'),
+                            uiImg: el2.querySelector('.bm-ui-img'),
+                            lives: el2.querySelector('.bm-lives'),
+                            bombImg: el2.querySelector('.bm-bomb-img'),
+                            bombCount: el2.querySelector('.bm-bomb-count'),
+                            shieldImg: el2.querySelector('.bm-shield-img')
+                        }
+                    };
+                }
+            }
 
-            const assets = window.BombermanAssets || {};
-            const uiImages = assets.uiImages || {};
-            const bombIcon = assets.uiBomb || null;
-            const shieldActive = assets.uiShieldActive || null;
-            const shieldInactive = assets.uiShieldInactive || null;
+            // update only specific fields
+            if (this.hudElements) {
+                const assets = window.BombermanAssets || {};
+                const p1ColorKey = assets.playerColorP1 || 'blue';
+                const p2ColorKey = assets.playerColorP2 || 'purple';
 
-            const buildPlayerHTML = (player, playerColorKey) => {
-                const uiImg = uiImages[playerColorKey] || null;
-                const uiSrc = (uiImg && uiImg.complete) ? uiImg.src : '';
-                const bombSrc = (bombIcon && bombIcon.complete) ? bombIcon.src : '';
-                const shieldSrc = (player.shield ? (shieldActive && shieldActive.complete ? shieldActive.src : '') : (shieldInactive && shieldInactive.complete ? shieldInactive.src : ''));
+                const update = (elem, player, colorKey) => {
+                    const uiImg = (assets.uiImages && assets.uiImages[colorKey]) ? assets.uiImages[colorKey] : null;
+                    if (uiImg && uiImg.complete) elem.uiImg.src = uiImg.src;
+                    const bombIcon = assets.uiBomb || null;
+                    if (bombIcon && bombIcon.complete) elem.bombImg.src = bombIcon.src;
+                    const shieldActive = assets.uiShieldActive || null;
+                    const shieldInactive = assets.uiShieldInactive || null;
+                    elem.lives.textContent = String(player.lives);
+                    elem.bombCount.textContent = String(Math.max(0, player.maxBombs - player.bombsPlaced));
+                    const sh = player.shield ? (shieldActive && shieldActive.complete ? shieldActive.src : '') : (shieldInactive && shieldInactive.complete ? shieldInactive.src : '');
+                    elem.shieldImg.src = sh || '';
+                };
 
-                return `
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <div style="display:flex; align-items:center; gap:4px;">
-                            <img src="${uiSrc}" style="width:40px;height:40px;object-fit:contain;border-radius:6px;" alt="PUI"/>
-                            <div style="font-size:24px; font-weight:600; background:#000; border:3px solid rgb(233,62,0); padding:6px; color:#fff; border-radius:4px; min-width:20px; text-align:center;">${player.lives}</div>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:4px;">
-                            <img src="${bombSrc}" style="width:40px;height:40px;object-fit:contain;" alt="Bomb"/>
-                            <div style="font-size:24px; background:#000; border:3px solid rgb(233,62,0); padding:6px; color:#fff; border-radius:4px; min-width:20px; text-align:center;">${Math.max(0, player.maxBombs - player.bombsPlaced)}</div>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:4px;">
-                            <img src="${shieldSrc}" style="width:40px;height:40px;object-fit:contain;" alt="Shield"/>
-                        </div>
-                    </div>`;
-            };
-
-            const p1ColorKey = (assets.playerColorP1) ? assets.playerColorP1 : 'blue';
-            const p2ColorKey = (assets.playerColorP2) ? assets.playerColorP2 : 'purple';
-
-            if (el1) el1.innerHTML = buildPlayerHTML(this.player1, p1ColorKey);
-            if (el2) el2.innerHTML = buildPlayerHTML(this.player2, p2ColorKey);
+                update(this.hudElements.p1, this.player1, p1ColorKey);
+                update(this.hudElements.p2, this.player2, p2ColorKey);
+            }
         } catch (e) {
             // ignore if DOM not ready or assets not available
         }
@@ -937,31 +838,37 @@ window.BombermanAssets.uiBomb = window.BombermanAssets.uiBomb || uiBombImg;
 window.BombermanAssets.uiShieldActive = window.BombermanAssets.uiShieldActive || uiShieldActiveImg;
 window.BombermanAssets.uiShieldInactive = window.BombermanAssets.uiShieldInactive || uiShieldInactiveImg;
 
-// attach audio helper functions exposed earlier in this file
-const audioApi = window.BombermanAudio || {};
-window.BombermanAssets.playPlaceBomb = audioApi.playPlaceBomb;
-window.BombermanAssets.playExplosion = audioApi.playExplosion;
-window.BombermanAssets.playDeath = audioApi.playDeath;
-
 function showMainMenu() {
     const el = document.getElementById('mainMenu');
     if (el) el.style.display = 'flex';
     const p = document.getElementById('pauseOverlay'); if (p) p.style.display = 'none';
     window.GamePaused = true;
-    try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('mainMenu'); } catch (e) {}
+    try { playBackgroundMusic('mainMenu', window.GameVolume || 1.0); } catch (e) {}
     try { startMainMenuIntro(); } catch (e) {}
+}
+
+// Ensure only one background music plays at a time
+function playBackgroundMusic(name, volume) {
+    try {
+        if (typeof audioPlayer !== 'undefined' && audioPlayer) {
+            ['mainMenu', 'game', 'victory'].forEach(n => {
+                try { if (n !== name) audioPlayer.StopAudio(n); } catch(e) {}
+            });
+            try { audioPlayer.PlayLoop(name, 0, volume || window.GameVolume || 1.0).catch(()=>{}); } catch(e) {}
+        }
+    } catch(e) {}
 }
 
 function hideMainMenu() {
     const el = document.getElementById('mainMenu'); if (el) el.style.display = 'none';
     window.GamePaused = false;
-    try { if (window.BombermanAudio && typeof window.BombermanAudio.stopMusic === 'function') window.BombermanAudio.stopMusic(); } catch (e) {}
+    try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.StopAudio('mainMenu'); } catch (e) {}
 }
 
 function startGameFromMenu() {
     hideMainMenu();
     Init(BombermanGame);
-    try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('game'); } catch (e) {}
+    try { playBackgroundMusic('game', window.GameVolume || 1.0); } catch (e) {}
 }
 
 function togglePause() {
@@ -1030,15 +937,11 @@ window.addEventListener('load', () => {
     if (vol) {
         updateVolumeSliderAppearance(vol);
         window.GameVolume = Number(vol.value) / 100.0;
-        if (window.BombermanAudio && typeof window.BombermanAudio.setVolume === 'function') {
-            window.BombermanAudio.setVolume(window.GameVolume);
-        }
+        try { if (typeof audioPlayer !== 'undefined' && audioPlayer) { ['mainMenu','game','victory','bomb','damage'].forEach(n => { try { audioPlayer.SetVolume(n, window.GameVolume); } catch(e){} }); } } catch(e){}
         vol.addEventListener('input', (e) => {
             const v = Number(e.target.value);
             window.GameVolume = isFinite(v) ? v / 100.0 : 1.0;
-            if (window.BombermanAudio && typeof window.BombermanAudio.setVolume === 'function') {
-                window.BombermanAudio.setVolume(window.GameVolume);
-            }
+            try { if (typeof audioPlayer !== 'undefined' && audioPlayer) { ['mainMenu','game','victory','bomb','damage'].forEach(n => { try { audioPlayer.SetVolume(n, window.GameVolume); } catch(e){} }); } } catch(e){}
             updateVolumeSliderAppearance(vol);
         });
     }
@@ -1090,14 +993,14 @@ function ShowGameOver(winner) {
     if (msg) msg.textContent = winner === 1 ? 'Player 1 Wins' : 'Player 2 Wins';
     if (overlay) overlay.style.display = 'flex';
     window.GamePaused = true;
-    try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('victory'); } catch (e) {}
+    try { playBackgroundMusic('victory', window.GameVolume || 1.0); } catch (e) {}
 }
 
 function HideGameOver() {
     const overlay = document.getElementById('gameOverOverlay');
     if (overlay) overlay.style.display = 'none';
     window.GamePaused = false;
-    try { if (window.BombermanAudio && typeof window.BombermanAudio.stopMusic === 'function') window.BombermanAudio.stopMusic(); } catch (e) {}
+    try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.StopAudio('victory'); } catch (e) {}
 }
 
 
@@ -1189,7 +1092,7 @@ function HideGameOver() {
                 if (elapsed >= dropDuration + explodeDelay) {
                     exploded = true;
                     fireStart = ts;
-                    try { if (window.BombermanAssets && window.BombermanAssets.playExplosion) window.BombermanAssets.playExplosion(); } catch (e) {}
+                    try { if (typeof audioPlayer !== 'undefined' && audioPlayer) audioPlayer.PlayFromTheStart('bomb', 0, window.GameVolume || 1.0).catch(()=>{}); } catch (e) {}
                 }
             } else {
                 const fe = ts - fireStart;
@@ -1241,7 +1144,7 @@ document.addEventListener('DOMContentLoaded', () => {
         HideGameOver(); ApplyPlayerSelections(); Init(BombermanGame);
         const main = document.getElementById('mainMenu'); if (main) main.style.display = 'none';
         window.GamePaused = false;
-        try { if (window.BombermanAudio && typeof window.BombermanAudio.playMusic === 'function') window.BombermanAudio.playMusic('game'); } catch (e) {}
+        try { playBackgroundMusic('game', window.GameVolume || 1.0); } catch (e) {}
     });
 });
 
